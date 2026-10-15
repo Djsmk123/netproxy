@@ -68,3 +68,4 @@ app/.build/
 app/.swiftpm/
 *.xcworkspace
 
+/build/

@@ -30,6 +30,7 @@ base64 = "0.22"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["registry", "fmt", "env-filter"] }
+notify = { version = "7", default-features = false, features = ["macos_kqueue"] }
 
 [dev-dependencies]
 sha2 = "0.10"

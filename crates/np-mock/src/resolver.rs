@@ -41,6 +41,16 @@ impl RuleMockResolver {
         })
     }
 
+    /// Get the rules (for registry access).
+    pub fn rules(&self) -> &Vec<Rule> {
+        &self.rules
+    }
+
+    /// Apply an action for a specific rule (public for registry use).
+    pub fn apply_action_for_rule(&self, rule: &Rule, req: &RequestView<'_>) -> MockDecision {
+        self.apply_action(rule, req)
+    }
+
     fn apply_action(&self, rule: &Rule, _req: &RequestView<'_>) -> MockDecision {
         match &rule.action {
             Action::Respond {

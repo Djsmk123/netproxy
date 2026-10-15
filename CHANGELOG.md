@@ -7,12 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned (M4)
-- MCP integration for programmatic mock authoring
-- Recorded-response conversion to mock rules
+### Added (M4 Phase 1) - 2026-10-16
+- **Dynamic Mock Registry** (`DynamicMockRegistry`)
+  - Runtime rule management (add, update, remove dynamic rules)
+  - Combines static (YAML) and dynamic (runtime) rules
+  - Thread-safe with read-optimized RwLock
+  - Priority-based rule merging
+  - Hot reload support for YAML config
+- **Validation Framework**
+  - Comprehensive rule validation with severity levels (Error, Warning, Info)
+  - Detects duplicate IDs, missing fixtures, invalid regex, unreachable rules
+  - Conflict detection for overlapping patterns
+  - Pre-validation on add/update operations
+- **File Watcher for Hot Reload**
+  - Automatic config reload on mocks.yaml changes
+  - 500ms debounce for atomic file writes
+  - Validates after each reload
+  - Clean shutdown support
+- **Control API - 10 New Methods**
+  - `mocks.list` - List all rules
+  - `mocks.list_dynamic` / `mocks.list_static` - List by source
+  - `mocks.get` - Get rule by ID
+  - `mocks.add` - Add dynamic rule with validation
+  - `mocks.update` - Update dynamic rule
+  - `mocks.remove` - Remove dynamic rule
+  - `mocks.clear_dynamic` - Clear all runtime rules
+  - `mocks.reload` - Manual config reload
+  - `mocks.validate` - Validate all rules
+- **Daemon Integration**
+  - Auto-starts file watcher when engine starts
+  - Validates rules on startup (fails if errors)
+  - Graceful watcher shutdown
+- **Serialization Support**
+  - All schema types now implement `Serialize`
+  - Validation results serializable for API responses
+
+### Changed
+- `DaemonConfig` now uses `DynamicMockRegistry` instead of static resolver
+- Mock config validation errors now fail daemon startup
+- Added `tracing` dependency to `np-mock`
+- Added `notify` crate for file watching
+
+### Planned (M4 Phase 2+)
+- Flow-to-mock conversion
 - Remote fixture fetching with caching
-- Real-time rule reloading without daemon restart
-- Rule conflict detection and validation
+- MCP integration for programmatic mock authoring
 - Simulation mode (dry-run without activating)
 
 ## [0.3.0] - M3: Mock Runtime - 2024-10-16

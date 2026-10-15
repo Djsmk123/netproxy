@@ -3,3 +3,4 @@ pub mod bodies;
 pub mod control;
 pub mod daemon;
 pub mod setup;
+pub mod watcher;

@@ -1,10 +1,12 @@
 //! Engine lifecycle owner: wires CA, store writer, bus and engine into numbered capture runs.
 
 use np_engine::{Bus, BusConfig, CaMaterial, EngineConfig, KeyStorage, EngineError, EngineHandle, MockResolver, NoMocks, ProxyEngine};
+use np_mock::DynamicMockRegistry;
 use np_store::{Store, StoreError, WriterHandle};
 use serde::Serialize;
 use std::{net::SocketAddr, path::PathBuf, sync::{atomic::Ordering, Arc}};
 use tokio::sync::{mpsc, watch, Mutex};
+use crate::watcher::{MockConfigWatcher, WatcherError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DaemonError {
@@ -18,6 +20,10 @@ pub enum DaemonError {
     Store(#[from] StoreError),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Watcher(#[from] WatcherError),
+    #[error(transparent)]
+    MockRegistry(#[from] np_mock::RegistryError),
 }
 
 pub struct DaemonConfig {
@@ -25,6 +31,8 @@ pub struct DaemonConfig {
     pub default_listen: SocketAddr,
     pub upstream_roots_pem: Option<Vec<u8>>,
     pub mock: Arc<dyn MockResolver>,
+    pub mock_registry: Option<Arc<DynamicMockRegistry>>,
+    pub mock_config_path: Option<PathBuf>,
     /// Retention cap for live database content. `None` disables pruning.
     pub max_db_bytes: Option<u64>,
     /// Body capture: `None` disables it. Per-body cap and total cap in bytes.
@@ -41,24 +49,55 @@ pub struct BodyConfig {
 
 impl DaemonConfig {
     pub fn new(data_dir: PathBuf) -> Self {
-        Self { data_dir, default_listen: "127.0.0.1:8899".parse().unwrap(), upstream_roots_pem: None, mock: Arc::new(NoMocks), max_db_bytes: Some(2 << 30), bodies: Some(BodyConfig { per_body_cap: 4 << 20, total_cap: 1 << 30 }), ca_storage: KeyStorage::File }
+        Self {
+            data_dir,
+            default_listen: "127.0.0.1:8899".parse().unwrap(),
+            upstream_roots_pem: None,
+            mock: Arc::new(NoMocks),
+            mock_registry: None,
+            mock_config_path: None,
+            max_db_bytes: Some(2 << 30),
+            bodies: Some(BodyConfig { per_body_cap: 4 << 20, total_cap: 1 << 30 }),
+            ca_storage: KeyStorage::File
+        }
     }
 
-    /// Load mock rules from a YAML config file and wrap the existing mock resolver.
+    /// Load mock rules from a YAML config file using DynamicMockRegistry.
+    ///
+    /// This enables hot-reload and runtime rule management.
     pub fn with_mock_config(mut self, config_path: PathBuf) -> Result<Self, DaemonError> {
-        let yaml = std::fs::read_to_string(&config_path)?;
-        let mock_config: np_mock::MockConfig = serde_yaml::from_str(&yaml)
-            .map_err(|e| DaemonError::Io(std::io::Error::other(format!("invalid mocks.yaml: {}", e))))?;
+        let registry = Arc::new(DynamicMockRegistry::new(
+            config_path.clone(),
+            self.mock.clone(),
+        )?);
 
-        // Resolve fixtures_dir relative to the config file location
-        let config_dir = config_path.parent().unwrap_or_else(|| std::path::Path::new("."));
-        let mut mock_config = mock_config;
-        if !mock_config.fixtures_dir.is_absolute() {
-            mock_config.fixtures_dir = config_dir.join(&mock_config.fixtures_dir);
+        // Validate rules on startup
+        let issues = registry.validate_all();
+        for issue in &issues {
+            match issue.severity {
+                np_mock::Severity::Error => {
+                    tracing::error!("mock config error [{}]: {}", issue.rule_id, issue.message);
+                }
+                np_mock::Severity::Warning => {
+                    tracing::warn!("mock config warning [{}]: {}", issue.rule_id, issue.message);
+                }
+                np_mock::Severity::Info => {
+                    tracing::info!("mock config info [{}]: {}", issue.rule_id, issue.message);
+                }
+            }
         }
 
-        self.mock = Arc::new(np_mock::RuleMockResolver::new(mock_config, self.mock.clone())
-            .map_err(|e| DaemonError::Io(std::io::Error::other(format!("mock config error: {}", e))))?);
+        // Fail if there are errors
+        let has_errors = issues.iter().any(|i| matches!(i.severity, np_mock::Severity::Error));
+        if has_errors {
+            return Err(DaemonError::Io(std::io::Error::other(
+                "mock configuration has errors (see logs above)",
+            )));
+        }
+
+        self.mock = registry.clone();
+        self.mock_registry = Some(registry);
+        self.mock_config_path = Some(config_path);
 
         Ok(self)
     }
@@ -70,6 +109,7 @@ struct RunState {
     handle: Box<dyn EngineHandle>,
     writer: WriterHandle,
     listen: SocketAddr,
+    watcher: Option<MockConfigWatcher>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -86,6 +126,7 @@ pub struct Daemon {
     engine: Arc<dyn ProxyEngine>,
     pub store: Store,
     ca: CaMaterial,
+    mock_registry: Option<Arc<DynamicMockRegistry>>,
     inner: Mutex<Option<RunState>>,
     committed: Arc<watch::Sender<u64>>,
     status: std::sync::Mutex<Status>,
@@ -103,8 +144,9 @@ impl Daemon {
         std::fs::create_dir_all(&cfg.data_dir)?;
         let store = Store::open(cfg.data_dir.join("netproxy.db"))?;
         let ca = CaMaterial::load_or_create_with(&cfg.data_dir.join("ca"), "NetProxy Local CA", &cfg.ca_storage)?;
+        let mock_registry = cfg.mock_registry.clone();
         Ok(Arc::new(Daemon {
-            cfg, engine, store, ca,
+            cfg, engine, store, ca, mock_registry,
             inner: Mutex::new(None),
             committed: Arc::new(watch::channel(0u64).0),
             status: std::sync::Mutex::new(Status { state: "stopped", run: None, listen: None, sequenced: 0, dropped: 0 }),
@@ -218,9 +260,28 @@ impl Daemon {
             }
         };
         let addr = handle.local_addr();
+
+        // Start file watcher for hot reload if we have a mock registry
+        let watcher = if let (Some(registry), Some(config_path)) =
+            (self.mock_registry.as_ref(), self.cfg.mock_config_path.as_ref())
+        {
+            match MockConfigWatcher::watch(config_path.clone(), registry.clone()) {
+                Ok(w) => {
+                    tracing::info!("mock config watcher started");
+                    Some(w)
+                }
+                Err(e) => {
+                    tracing::warn!("failed to start mock config watcher: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         *self.stats.lock().unwrap() = Some(bus.stats());
         *self.status.lock().unwrap() = Status { state: "running", run: Some(run.clone()), listen: Some(addr.to_string()), sequenced: 0, dropped: 0 };
-        *g = Some(RunState { run, bus, handle, writer, listen: addr });
+        *g = Some(RunState { run, bus, handle, writer, listen: addr, watcher });
         drop(g);
         Ok(self.status())
     }
@@ -228,7 +289,14 @@ impl Daemon {
     pub async fn stop(&self) -> Result<Status, DaemonError> {
         let mut g = self.inner.lock().await;
         let Some(rs) = g.take() else { return Err(DaemonError::NotRunning) };
-        let RunState { run, bus, handle, writer, listen } = rs;
+        let RunState { run, bus, handle, writer, listen, watcher } = rs;
+
+        // Stop watcher first
+        if let Some(w) = watcher {
+            w.stop().await;
+            tracing::info!("mock config watcher stopped");
+        }
+
         handle.shutdown().await;
         bus.close().await;
         drop(bus);
@@ -240,6 +308,11 @@ impl Daemon {
             out.dropped = st.dropped.load(Ordering::Relaxed);
         }
         Ok(out)
+    }
+
+    /// Get the mock registry if configured.
+    pub fn mock_registry(&self) -> Option<Arc<DynamicMockRegistry>> {
+        self.mock_registry.clone()
     }
 
     /// Latest run id known to the store (current run if running).

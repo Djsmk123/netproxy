@@ -1,11 +1,11 @@
 //! YAML schema for mock rule configuration.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Root configuration loaded from mocks.yaml.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MockConfig {
     pub version: u32,
     pub fixtures_dir: PathBuf,
@@ -13,7 +13,7 @@ pub struct MockConfig {
 }
 
 /// A single mock rule with matching criteria and action.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Rule {
     pub id: String,
     #[serde(default)]
@@ -32,7 +32,7 @@ fn default_true() -> bool {
 }
 
 /// Criteria for matching a request.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct MatchSpec {
     pub method: Option<String>,
     pub host: Option<String>,
@@ -43,7 +43,7 @@ pub struct MatchSpec {
 }
 
 /// Action to take when a rule matches.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
     Respond {
@@ -66,7 +66,7 @@ fn default_status() -> u16 {
 }
 
 /// Source of response body content.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum BodySource {
     File { file: String },

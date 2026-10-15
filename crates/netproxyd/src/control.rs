@@ -414,6 +414,98 @@ async fn dispatch(
             let found = subs.remove(&subscription).map(|t| t.cancel()).is_some();
             Ok(json!({"unsubscribed": found}))
         }
+        "mocks.list" => {
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let rules = registry.list_rules();
+            Ok(json!({"rules": rules}))
+        }
+        "mocks.list_dynamic" => {
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let rules = registry.list_dynamic_rules();
+            Ok(json!({"rules": rules}))
+        }
+        "mocks.list_static" => {
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let rules = registry.list_static_rules();
+            Ok(json!({"rules": rules}))
+        }
+        "mocks.get" => {
+            #[derive(Deserialize)]
+            struct P { id: String }
+            let P { id } = p(params)?;
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let rule = registry.get_rule(&id).ok_or_else(|| app(format!("rule not found: {}", id)))?;
+            Ok(json!({"rule": rule}))
+        }
+        "mocks.add" => {
+            #[derive(Deserialize)]
+            struct P { rule: np_mock::Rule }
+            let P { rule } = p(params)?;
+            tracing::info!(client, rule_id = %rule.id, "mocks.add");
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+
+            // Validate before adding
+            let issues = registry.validate_rule(&rule);
+            let errors: Vec<_> = issues.iter()
+                .filter(|i| matches!(i.severity, np_mock::Severity::Error))
+                .collect();
+
+            if !errors.is_empty() {
+                return Err(app(format!("validation errors: {:?}", errors)));
+            }
+
+            registry.add_rule(rule).map_err(app)?;
+            Ok(json!({"success": true}))
+        }
+        "mocks.update" => {
+            #[derive(Deserialize)]
+            struct P { rule: np_mock::Rule }
+            let P { rule } = p(params)?;
+            tracing::info!(client, rule_id = %rule.id, "mocks.update");
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+
+            // Validate before updating
+            let issues = registry.validate_rule(&rule);
+            let errors: Vec<_> = issues.iter()
+                .filter(|i| matches!(i.severity, np_mock::Severity::Error))
+                .collect();
+
+            if !errors.is_empty() {
+                return Err(app(format!("validation errors: {:?}", errors)));
+            }
+
+            let updated = registry.update_rule(rule).map_err(app)?;
+            Ok(json!({"updated": updated}))
+        }
+        "mocks.remove" => {
+            #[derive(Deserialize)]
+            struct P { id: String }
+            let P { id } = p(params)?;
+            tracing::info!(client, rule_id = %id, "mocks.remove");
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let removed = registry.remove_rule(&id).map_err(app)?;
+            Ok(json!({"removed": removed}))
+        }
+        "mocks.clear_dynamic" => {
+            tracing::info!(client, "mocks.clear_dynamic");
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            registry.clear_dynamic_rules();
+            Ok(json!({"success": true}))
+        }
+        "mocks.reload" => {
+            tracing::info!(client, "mocks.reload");
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            registry.reload().map_err(app)?;
+
+            // Return validation issues
+            let issues = registry.validate_all();
+            Ok(json!({"success": true, "issues": issues}))
+        }
+        "mocks.validate" => {
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let issues = registry.validate_all();
+            Ok(json!({"issues": issues}))
+        }
         other => Err((E_METHOD, format!("unknown method {other}"))),
     }
 }
