@@ -48,8 +48,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `tracing` dependency to `np-mock`
 - Added `notify` crate for file watching
 
-### Planned (M4 Phase 2+)
-- Flow-to-mock conversion
+### In Progress (M4 Phase 2)
+- **Flow-to-Mock Conversion** (Designed, implementation pending)
+  - Convert captured HTTP flows to mock rules
+  - Extract response bodies as fixtures
+  - Smart match pattern generation
+  - Control API: `mocks.from_flow`, `mocks.from_flow_and_add`
+  - See `docs/m4-phase2-flow-conversion.md` for design
+
+### Planned (M4 Phase 3+)
+- Smart pattern extraction (detect IDs, UUIDs, slugs)
+- Batch flow conversion
 - Remote fixture fetching with caching
 - MCP integration for programmatic mock authoring
 - Simulation mode (dry-run without activating)
