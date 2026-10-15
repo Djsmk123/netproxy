@@ -1,0 +1,172 @@
+# Changelog
+
+All notable changes to NetProxy will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Planned (M4)
+- MCP integration for programmatic mock authoring
+- Recorded-response conversion to mock rules
+- Remote fixture fetching with caching
+- Real-time rule reloading without daemon restart
+- Rule conflict detection and validation
+- Simulation mode (dry-run without activating)
+
+## [0.3.0] - M3: Mock Runtime - 2024-10-16
+
+### Added
+- **Mock Rule System** - YAML-based declarative mock rules
+  - Pattern matching for host, path, method, headers, and query parameters
+  - Support for wildcards (`*.example.com`, `/api/*`)
+  - Regex path matching (`/api/users/\d+`)
+  - Priority-based rule ordering
+  - Enable/disable per rule
+- **Mock Actions**
+  - `respond`: Return mock responses with custom status, headers, and body
+  - `pass`: Let requests through to real servers
+  - `fail`: Simulate connection failures
+- **Fixture System**
+  - File-based fixtures with caching
+  - Inline body support
+  - SHA-256 content hashing
+  - Relative path resolution
+- **Mock Events**
+  - `MockHit` events for tracking rule matches
+  - `mocked: true` flag on `ResponseHead` events
+- **New Crate: `np-mock`**
+  - Schema definitions for YAML config
+  - Pattern matching engine
+  - Fixture resolver with caching
+  - `RuleMockResolver` implementation
+
+### Changed
+- Daemon now auto-loads `mocks.yaml` from data directory on startup
+- Mock resolver wraps existing mock stack (composable design)
+
+### Documentation
+- Added comprehensive mock system guide
+- Added examples directory with sample configurations
+- Updated architecture documentation
+
+## [0.2.0] - M2: Store & Control API - 2024-10-15
+
+### Added
+- **Persistent Storage** - SQLite-based event and flow storage
+  - Events table with JSON payloads
+  - Flows table with metadata
+  - Runs table for capture sessions
+  - Retention and pruning policies
+- **Control API** - JSON-RPC over Unix domain sockets
+  - Engine lifecycle control (`start`, `stop`, `status`)
+  - Event streaming (`subscribe`, `since`)
+  - Flow queries (`list`, `get`)
+  - Token-based authentication
+- **Body Storage**
+  - File-based body storage separate from SQLite
+  - Per-body and total caps
+  - LRU eviction
+  - Orphan cleanup
+- **New Crates**
+  - `np-store`: Storage layer
+  - `netproxyd`: Daemon orchestrator
+
+### Changed
+- Refactored engine to emit events through `EventSink`
+- CA material now managed by daemon
+- Test infrastructure improved with harness crate
+
+### Documentation
+- Added control API reference
+- Added architecture overview
+
+## [0.1.0] - M1: Production Engine - 2024-10-15
+
+### Added
+- **Production-Ready Proxy Engine**
+  - HTTP/1.1 and HTTP/2 support
+  - HTTPS with MITM TLS interception
+  - Automatic CA generation and management
+  - Request/response capture
+- **Event Model**
+  - Structured events for all traffic
+  - Flow state machine with validation
+  - Connection lifecycle tracking
+  - Body streaming with chunking
+- **CA Management**
+  - macOS Keychain integration for private key storage
+  - Per-host leaf certificate generation
+  - Trust chain validation
+- **Conformance Tests**
+  - End-to-end integration tests
+  - Flow state validation
+  - Error handling verification
+  - TLS functionality tests
+
+### Changed
+- Migrated from spike to production engine implementation
+- Formalized event schema (`np-model` crate)
+- Separated engine from daemon concerns
+
+### Documentation
+- Added M1 implementation report
+- Documented conformance test suite
+
+## [0.0.1] - M0: Spike - 2024-10-15
+
+### Added
+- **Initial Spike Implementation**
+  - Basic proxy using hudsucker
+  - HTTPS MITM proof of concept
+  - Simple event capture
+  - Exploratory tests
+
+### Documentation
+- M0 spike plan
+- M0 findings report
+- Initial architectural decisions
+
+## Migration Notes
+
+### Upgrading from M2 to M3
+
+No database changes required. To use mocks:
+
+1. Create `mocks.yaml` in your data directory
+2. Create `fixtures/` directory for fixture files
+3. Restart netproxyd
+
+Configuration is backward compatible - daemon works normally without `mocks.yaml`.
+
+### Upgrading from M1 to M2
+
+Database changes required:
+- Events now stored in SQLite (previously in-memory)
+- New control API replaces direct engine access
+- Bodies now stored as files (not in database)
+
+Migration is automatic on first run.
+
+### Upgrading from M0 to M1
+
+Complete rewrite - no migration path. M0 was a spike.
+
+## Version History
+
+- **M0 (2024-10-15)**: Initial spike and proof of concept
+- **M1 (2024-10-15)**: Production engine with conformance tests
+- **M2 (2024-10-15)**: Store and control API
+- **M3 (2024-10-16)**: Deterministic mock rule runtime
+- **M4 (Planned)**: MCP integration and advanced features
+
+## Links
+
+- [Repository](https://github.com/yourusername/netproxy)
+- [Documentation](docs/)
+- [Issues](https://github.com/yourusername/netproxy/issues)
+
+---
+
+**Note**: This project is under active development. APIs may change between releases.

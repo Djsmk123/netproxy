@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.np.probe.nsc">
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <application android:label="np-nsc" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/network_security_config">
+    <activity android:name="dev.np.probe.MainActivity" android:exported="true">
+      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+    </activity>
+  </application>
+</manifest>

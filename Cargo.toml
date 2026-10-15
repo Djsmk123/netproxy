@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["harness", "spikes/rust", "crates/np-model", "crates/np-engine", "crates/np-store", "crates/np-mock", "crates/netproxyd"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }

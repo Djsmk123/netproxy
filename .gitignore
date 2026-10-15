@@ -1,0 +1,70 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcworkspace/contents.xcworkspacedata
+/*.gcno
+**/xcshareddata/WorkspaceSettings.xcsettings
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test data
+/data
+*.db
+*.db-shm
+*.db-wal
+events.jsonl
+
+# NetProxy specific
+*.err
+/bodies/
+
+# Logs
+*.log
+
+# macOS app build
+app/DerivedData/
+app/build/
+*.app
+
+# Temporary files
+/tmp/
+*.tmp
+
+# Mock configurations (may contain sensitive data)
+# Uncomment if you want to ignore mock configs:
+# mocks.yaml
+# fixtures/
+
+# Environment variables
+.env
+.env.local
+
+# Swift Package Manager build
+app/.build/
+app/.swiftpm/
+*.xcworkspace
+

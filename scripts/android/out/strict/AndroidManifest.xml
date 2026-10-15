@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.np.probe.strict">
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <application android:label="np-strict" android:usesCleartextTraffic="false" >
+    <activity android:name="dev.np.probe.MainActivity" android:exported="true">
+      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+    </activity>
+  </application>
+</manifest>

@@ -1,0 +1,18 @@
+[package]
+name = "np-spike-rust"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+hudsucker = { version = "0.25", features = ["http2"] }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["registry"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2", "webpki-roots", "aws-lc-rs"] }
+webpki-roots = "1"
+sha2 = "0.10"
+http-body-util = "0.1"
+bytes = "1"
+base64 = "0.22"
