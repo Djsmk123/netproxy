@@ -71,6 +71,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Validation before adding to registry
   - See `docs/m4-phase2-flow-conversion.md` for complete guide
 
+### Added (M4 Phase 3) - 2026-10-17
+- **Smart Pattern Extraction** ✅ Complete
+  - Automatic detection of dynamic segments in URL paths
+  - Pattern suggestion with multiple specificity levels
+  - **Pattern Detector Module** (`netproxyd/src/pattern_detector.rs`)
+    - Detects: UUIDs, numeric IDs, dates, timestamps, hex values, slugs
+    - Generates 3 specificity levels: Exact, Moderate, Broad
+    - Smart static prefix detection (stops at version indicators)
+  - **Control API - 1 New Method:**
+    - `mocks.analyze_path` - Analyze path and return pattern suggestions
+  - **Enhanced Methods:**
+    - `mocks.from_flow` - Now accepts `pattern_analysis` and `pattern_specificity` params
+    - `mocks.from_flow_and_add` - Same pattern analysis support
+  - **Flow Converter Updates:**
+    - Added `pattern_analysis: bool` option
+    - Added `pattern_specificity: Option<Specificity>` for auto-application
+    - Returns `pattern_analysis: Option<PathAnalysis>` in results
+  - **Features:**
+    - Regex-based segment classification
+    - Static keyword detection for common API terms
+    - Example match generation for each pattern
+    - Seamless integration with flow conversion
+  - See `docs/m4-phase3-smart-patterns.md` for design
+  - See `docs/TESTING-M4-PHASE3.md` for testing guide
+
 ### Added (M4 Phase 4) - 2026-10-17
 - **MCP Integration** ✅ Complete
   - Model Context Protocol server for AI-assisted mock management

@@ -12,6 +12,7 @@
 //! duplicate or reorder events, nor slow capture. A reconnecting client resumes with `since`.
 
 use crate::daemon::{Daemon, DaemonError};
+use crate::pattern_detector::{PatternDetector, Specificity};
 use futures::{SinkExt, StreamExt};
 use np_model::{API_VERSION, SCHEMA_VERSION};
 use np_store::{Cursor, FlowFilter};
@@ -506,6 +507,17 @@ async fn dispatch(
             let issues = registry.validate_all();
             Ok(json!({"issues": issues}))
         }
+        "mocks.analyze_path" => {
+            #[derive(Deserialize)]
+            struct P {
+                path: String,
+            }
+            let P { path } = p(params)?;
+            tracing::info!(client, path = %path, "mocks.analyze_path");
+
+            let analysis = PatternDetector::analyze(&path);
+            Ok(serde_json::to_value(analysis).map_err(app)?)
+        }
         "mocks.from_flow" => {
             #[derive(Deserialize)]
             struct P {
@@ -523,6 +535,10 @@ async fn dispatch(
                 match_headers: Option<Vec<String>>,
                 #[serde(default)]
                 write_fixtures: bool,
+                #[serde(default)]
+                pattern_analysis: Option<bool>,
+                #[serde(default)]
+                pattern_specificity: Option<String>,
             }
             let P {
                 run,
@@ -533,6 +549,8 @@ async fn dispatch(
                 match_query,
                 match_headers,
                 write_fixtures,
+                pattern_analysis,
+                pattern_specificity,
             } = p(params)?;
 
             let run = resolve_run(run)?;
@@ -545,6 +563,14 @@ async fn dispatch(
                 .map(|p| p.join("fixtures"))
                 .unwrap_or_else(|| d.data_dir().join("fixtures"));
 
+            // Parse pattern specificity
+            let parsed_specificity = pattern_specificity.as_deref().and_then(|s| match s {
+                "exact" => Some(Specificity::Exact),
+                "moderate" => Some(Specificity::Moderate),
+                "broad" => Some(Specificity::Broad),
+                _ => None,
+            });
+
             let options = crate::flow_converter::ConvertOptions {
                 fixtures_dir: fixtures_dir.clone(),
                 inline_threshold: inline_threshold.unwrap_or(1024),
@@ -552,6 +578,8 @@ async fn dispatch(
                 enabled: enabled.unwrap_or(true),
                 match_query: match_query.unwrap_or(false),
                 match_headers: match_headers.unwrap_or_default(),
+                pattern_analysis: pattern_analysis.unwrap_or(false),
+                pattern_specificity: parsed_specificity,
             };
 
             // Convert flow to mock
@@ -576,7 +604,7 @@ async fn dispatch(
                 }
             }
 
-            Ok(json!({
+            let mut response = json!({
                 "rule": result.rule,
                 "fixtures": result.fixtures.iter().map(|f| json!({
                     "path": f.path,
@@ -585,7 +613,13 @@ async fn dispatch(
                 })).collect::<Vec<_>>(),
                 "warnings": result.warnings,
                 "fixtures_written": write_fixtures && !result.fixtures.is_empty(),
-            }))
+            });
+
+            if let Some(analysis) = result.pattern_analysis {
+                response["pattern_analysis"] = serde_json::to_value(analysis).map_err(app)?;
+            }
+
+            Ok(response)
         }
         "mocks.from_flow_and_add" => {
             #[derive(Deserialize)]
@@ -602,6 +636,10 @@ async fn dispatch(
                 match_query: Option<bool>,
                 #[serde(default)]
                 match_headers: Option<Vec<String>>,
+                #[serde(default)]
+                pattern_analysis: Option<bool>,
+                #[serde(default)]
+                pattern_specificity: Option<String>,
             }
             let P {
                 run,
@@ -611,6 +649,8 @@ async fn dispatch(
                 inline_threshold,
                 match_query,
                 match_headers,
+                pattern_analysis,
+                pattern_specificity,
             } = p(params)?;
 
             let run_resolved = resolve_run(run)?;
@@ -623,6 +663,14 @@ async fn dispatch(
                 .map(|p| p.join("fixtures"))
                 .unwrap_or_else(|| d.data_dir().join("fixtures"));
 
+            // Parse pattern specificity
+            let parsed_specificity = pattern_specificity.as_deref().and_then(|s| match s {
+                "exact" => Some(Specificity::Exact),
+                "moderate" => Some(Specificity::Moderate),
+                "broad" => Some(Specificity::Broad),
+                _ => None,
+            });
+
             let options = crate::flow_converter::ConvertOptions {
                 fixtures_dir: fixtures_dir.clone(),
                 inline_threshold: inline_threshold.unwrap_or(1024),
@@ -630,6 +678,8 @@ async fn dispatch(
                 enabled: enabled.unwrap_or(true),
                 match_query: match_query.unwrap_or(false),
                 match_headers: match_headers.unwrap_or_default(),
+                pattern_analysis: pattern_analysis.unwrap_or(false),
+                pattern_specificity: parsed_specificity,
             };
 
             // Convert flow to mock
@@ -669,12 +719,18 @@ async fn dispatch(
 
             registry.add_rule(result.rule.clone()).map_err(app)?;
 
-            Ok(json!({
+            let mut response = json!({
                 "success": true,
                 "rule": result.rule,
                 "fixtures_written": !result.fixtures.is_empty(),
                 "warnings": result.warnings,
-            }))
+            });
+
+            if let Some(analysis) = result.pattern_analysis {
+                response["pattern_analysis"] = serde_json::to_value(analysis).map_err(app)?;
+            }
+
+            Ok(response)
         }
         other => Err((E_METHOD, format!("unknown method {other}"))),
     }

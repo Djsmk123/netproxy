@@ -1,5 +1,6 @@
 //! Convert captured HTTP flows into mock rules.
 
+use crate::pattern_detector::{PathAnalysis, PatternDetector, Specificity};
 use np_model::{BodyDir, Envelope, Event};
 use np_mock::{Action, BodySource, MatchSpec, Rule};
 use np_store::{FlowRow, Reader};
@@ -15,6 +16,8 @@ pub struct ConvertOptions {
     pub enabled: bool,
     pub match_query: bool,
     pub match_headers: Vec<String>,
+    pub pattern_analysis: bool,
+    pub pattern_specificity: Option<Specificity>,
 }
 
 impl Default for ConvertOptions {
@@ -26,6 +29,8 @@ impl Default for ConvertOptions {
             enabled: true,
             match_query: false,
             match_headers: Vec::new(),
+            pattern_analysis: false,
+            pattern_specificity: None,
         }
     }
 }
@@ -36,6 +41,8 @@ pub struct ConversionResult {
     pub rule: Rule,
     pub fixtures: Vec<Fixture>,
     pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pattern_analysis: Option<PathAnalysis>,
 }
 
 /// A fixture file to be written.
@@ -71,8 +78,33 @@ pub fn convert_flow(
     // Extract request/response info from events
     let (req_headers, resp_headers, resp_body_preview) = extract_from_events(&events);
 
+    // Analyze path patterns if requested
+    let pattern_analysis = if options.pattern_analysis {
+        Some(PatternDetector::analyze(
+            flow.path.as_deref().unwrap_or("/"),
+        ))
+    } else {
+        None
+    };
+
+    // Determine final path to use in match spec
+    let final_path = if let Some(specificity) = options.pattern_specificity {
+        // Apply pattern specificity if specified
+        pattern_analysis
+            .as_ref()
+            .and_then(|pa| {
+                pa.suggestions
+                    .iter()
+                    .find(|s| s.specificity == specificity)
+                    .map(|s| s.pattern.clone())
+            })
+            .or_else(|| flow.path.clone())
+    } else {
+        flow.path.clone()
+    };
+
     // Build match spec
-    let match_spec = build_match_spec(&flow, &req_headers, options);
+    let match_spec = build_match_spec_with_path(&flow, &req_headers, final_path, options);
 
     // Build response action
     let (action, fixtures) = build_response_action(
@@ -102,6 +134,7 @@ pub fn convert_flow(
         rule,
         fixtures,
         warnings,
+        pattern_analysis,
     })
 }
 
@@ -148,15 +181,16 @@ fn extract_from_events(
     (req_headers, resp_headers, resp_body_preview)
 }
 
-fn build_match_spec(
+fn build_match_spec_with_path(
     flow: &FlowRow,
     req_headers: &HashMap<String, String>,
+    path: Option<String>,
     options: &ConvertOptions,
 ) -> MatchSpec {
     let mut spec = MatchSpec {
         method: flow.method.clone(),
         host: flow.host.clone(),
-        path: flow.path.clone(),
+        path,
         ..Default::default()
     };
 
