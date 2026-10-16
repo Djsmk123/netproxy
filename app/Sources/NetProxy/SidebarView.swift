@@ -25,10 +25,24 @@ struct SidebarView: View {
                 FilterRow(label: "All traffic", icon: "list.bullet", active: !model.filter.isActive || model.filter == defaultFilter) { model.filter = FilterState() }
                 FilterRow(label: "Problems", icon: "exclamationmark.triangle", active: model.filter.onlyProblems) { var f = FilterState(); f.onlyProblems = true; model.filter = f }
                 FilterRow(label: "Mocked", icon: "theatermasks", active: model.filter.mockedOnly) { var f = FilterState(); f.mockedOnly = true; model.filter = f }
-                ForEach([2, 3, 4, 5], id: \.self) { c in
-                    statusClassRow(c)
+                Divider()
+                Group {
+                    statusClassRow(2, label: "Success (2xx)")
+                    statusClassRow(3, label: "Redirect (3xx)")
+                    statusClassRow(4, label: "Client Error (4xx)")
+                    statusClassRow(5, label: "Server Error (5xx)")
                 }
             }
+            if !methods.isEmpty {
+                Section("Methods") {
+                    ForEach(methods, id: \.0) { method, n in
+                        FilterRow(label: method, icon: "arrow.right.circle", active: model.filter.method == method, tint: Style.methodColor(method), trailing: "\(n)") {
+                            var f = FilterState(); f.method = method; model.filter = f
+                        }
+                    }
+                }
+            }
+
             if !hosts.isEmpty {
                 Section("Hosts") {
                     ForEach(hosts, id: \.0) { host, n in
@@ -45,7 +59,7 @@ struct SidebarView: View {
 
     private var defaultFilter: FilterState { FilterState() }
 
-    private func statusClassRow(_ c: Int) -> some View {
+    private func statusClassRow(_ c: Int, label: String? = nil) -> some View {
         let tint: Color
         switch c {
         case 2: tint = .green
@@ -53,11 +67,16 @@ struct SidebarView: View {
         case 4: tint = .orange
         default: tint = .red
         }
-        return FilterRow(label: "\(c)xx", icon: "circle.fill", active: model.filter.statusClass == c, tint: tint) {
+        return FilterRow(label: label ?? "\(c)xx", icon: "circle.fill", active: model.filter.statusClass == c, tint: tint) {
             var f = FilterState()
             f.statusClass = c
             model.filter = f
         }
+    }
+
+    private var methods: [(String, Int)] {
+        Dictionary(grouping: model.flows.compactMap(\.method), by: { $0 }).map { ($0.key, $0.value.count) }
+            .sorted { $0.1 > $1.1 }.prefix(8).map { $0 }
     }
 
     private var hosts: [(String, Int)] {

@@ -28,9 +28,12 @@ getrandom = "0.3"
 bytes = "1"
 base64 = "0.22"
 thiserror = "2"
+anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["registry", "fmt", "env-filter"] }
 notify = { version = "7", default-features = false, features = ["macos_kqueue"] }
+regex = "1"
+lazy_static = "1.5"
 
 [dev-dependencies]
 sha2 = "0.10"

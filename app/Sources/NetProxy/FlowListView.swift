@@ -24,6 +24,7 @@ struct FlowListView: View {
                         HStack(spacing: 4) {
                             Text(r.host ?? "—").lineLimit(1)
                             if r.mocked { Pill(text: "MOCK", color: .purple) }
+                            if r.rule != nil { Pill(text: "RULE", color: .green) }
                         }
                     }.width(min: 120, ideal: 200)
                     TableColumn("Path") { r in
@@ -42,7 +43,31 @@ struct FlowListView: View {
                 .contextMenu(forSelectionType: FlowRow.ID.self) { ids in
                     if let id = ids.first, let r = model.flows.first(where: { $0.id == id }) {
                         Button("Copy URL") { copyToPasteboard(r.uri ?? "") }
-                        if let h = r.host { Button("Show Only \(h)") { var f = FilterState(); f.host = h; model.filter = f } }
+                        if let h = r.host {
+                            Button("Filter by Host: \(h)") { var f = FilterState(); f.host = h; model.filter = f }
+                        }
+                        if let m = r.method {
+                            Button("Filter by Method: \(m)") { var f = FilterState(); f.method = m; model.filter = f }
+                        }
+                        Divider()
+                        if let status = r.status {
+                            let statusClass = status / 100
+                            Button("Filter \(statusClass)xx Responses") { var f = FilterState(); f.statusClass = statusClass; model.filter = f }
+                        }
+                        Divider()
+                        Button("Copy as cURL") {
+                            Task {
+                                if let detail = await model.detail(for: r) {
+                                    let headers = detail.events.lazy.compactMap { e -> Headers? in
+                                        if case .requestHead(let req) = e.event { return req.headers }
+                                        return nil
+                                    }.first ?? []
+                                    let body = await model.body(for: r, dir: .req).data
+                                    let curl = CurlExport.command(method: r.method ?? "GET", url: r.uri ?? "", headers: headers, body: body)
+                                    copyToPasteboard(curl)
+                                }
+                            }
+                        }
                     }
                 }
                 footer

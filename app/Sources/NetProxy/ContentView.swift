@@ -27,34 +27,76 @@ struct MainView: View {
     @Environment(CaptureModel.self) private var model
     @State private var showSetup = false
     @State private var showDiagnostics = false
+    @State private var showSessionManagement = false
+    @State private var showThrottling = false
+    @State private var showBreakpoints = false
+    @State private var showExport = false
 
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView {
-            SidebarView()
-                .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 320)
-        } detail: {
-            VSplitView {
-                FlowListView()
-                    .frame(minHeight: 200)
-                InspectorView()
-                    .frame(minHeight: 180, idealHeight: 320)
-            }
-        }
-        .searchable(text: $model.filter.text, placement: .toolbar, prompt: "Filter URLs")
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                CaptureButton()
-                Button { showDiagnostics = true } label: {
-                    Label("Diagnostics", systemImage: model.diagnostics.problems.isEmpty ? "stethoscope" : "exclamationmark.shield")
+        VStack(spacing: 0) {
+            NavigationSplitView {
+                SidebarView()
+                    .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 320)
+            } detail: {
+                VSplitView {
+                    FlowListView()
+                        .frame(minHeight: 200)
+                    InspectorView()
+                        .frame(minHeight: 180, idealHeight: 320)
                 }
-                .help("Why can't some traffic be inspected?")
-                .badge(model.diagnostics.problems.count)
-                Button { showSetup = true } label: { Label("Device Setup", systemImage: "iphone.and.arrow.forward") }
-                    .help("Connect a phone, simulator or emulator")
-                Button { model.clearView() } label: { Label("Clear", systemImage: "trash") }
-                    .help("Clear the list (captured data stays in the session)")
             }
+            .searchable(text: $model.filter.text, placement: .toolbar, prompt: "Filter URLs, hosts, or paths")
+            .toolbar {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    CaptureButton()
+
+                    Menu {
+                        Button("Clear Current View") {
+                            model.clearView()
+                        }
+                        Button("Clear by Host...") {
+                            showSessionManagement = true
+                        }
+                        Divider()
+                        Button("Clear All", role: .destructive) {
+                            model.clearView()
+                        }
+                    } label: {
+                        Label("Clear", systemImage: "trash")
+                    }
+                    .help("Clear sessions")
+
+                    Button { showThrottling = true } label: {
+                        Label("Throttling", systemImage: "speedometer")
+                    }
+                    .help("Bandwidth throttling")
+
+                    Button { showBreakpoints = true } label: {
+                        Label("Breakpoints", systemImage: "pause.circle")
+                    }
+                    .help("Request/Response breakpoints")
+
+                    Button { showExport = true } label: {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .help("Export HAR or other formats")
+                    .disabled(model.flows.isEmpty)
+
+                    Button { showDiagnostics = true } label: {
+                        Label("Diagnostics", systemImage: model.diagnostics.problems.isEmpty ? "stethoscope" : "exclamationmark.shield")
+                    }
+                    .help("Why can't some traffic be inspected?")
+                    .badge(model.diagnostics.problems.count)
+
+                    Button { showSetup = true } label: {
+                        Label("Device Setup", systemImage: "iphone.and.arrow.forward")
+                    }
+                    .help("Connect a phone, simulator or emulator")
+                }
+            }
+
+            StatusBarView()
         }
         #if DEBUG
         .task {
@@ -70,6 +112,10 @@ struct MainView: View {
         #endif
         .sheet(isPresented: $showSetup) { DeviceSetupView() }
         .sheet(isPresented: $showDiagnostics) { DiagnosticsView() }
+        .sheet(isPresented: $showSessionManagement) { SessionManagementView() }
+        .sheet(isPresented: $showThrottling) { ThrottlingView() }
+        .sheet(isPresented: $showBreakpoints) { BreakpointsView() }
+        .sheet(isPresented: $showExport) { ExportView() }
         .overlay(alignment: .top) { Banners() }
     }
 }

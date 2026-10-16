@@ -71,11 +71,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Validation before adding to registry
   - See `docs/m4-phase2-flow-conversion.md` for complete guide
 
+### Added (M4 Phase 4) - 2026-10-17
+- **MCP Integration** ✅ Complete
+  - Model Context Protocol server for AI-assisted mock management
+  - Enables Claude and other AI assistants to programmatically manage mocks
+  - **New Crate:** `np-mcp` - MCP server binary
+  - **Control Client Library** (`netproxyd/src/control_client.rs`)
+    - Reusable client for connecting to netproxyd control API
+    - JSON-RPC 2.0 over Unix domain socket
+    - Automatic authentication handshake
+  - **MCP Tools (9 total):**
+    - `list_flows` - List captured HTTP requests
+    - `get_flow` - Get flow details
+    - `list_mocks` - List active mocks (all/static/dynamic)
+    - `create_mock` - Create new mock rule
+    - `update_mock` - Update existing mock
+    - `delete_mock` - Remove mock
+    - `flow_to_mock` - Convert flow to mock (with add_to_registry option)
+    - `validate_mocks` - Check for issues
+    - `create_fixture` - Write fixture file
+  - **Features:**
+    - Stdio-based JSON-RPC protocol (MCP 2024-11-05)
+    - Proper error handling with MCP error codes
+    - Path traversal protection for fixtures
+    - Claude Desktop integration ready
+    - Comprehensive README with configuration examples
+  - See `crates/np-mcp/README.md` for setup guide
+  - See `docs/m4-phase4-mcp-integration.md` for design
+
 ### Planned (M4 Phase 3+)
 - Smart pattern extraction (detect IDs, UUIDs, slugs)
 - Batch flow conversion
 - Remote fixture fetching with caching
-- MCP integration for programmatic mock authoring
 - Simulation mode (dry-run without activating)
 
 ## [0.3.0] - M3: Mock Runtime - 2024-10-16

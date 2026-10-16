@@ -77,7 +77,17 @@ struct NetProxyApp: App {
                 Button(model.status?.isRunning == true ? "Stop Capture" : "Start Capture") {
                     Task { if model.status?.isRunning == true { await model.stopCapture() } else { await model.startCapture() } }
                 }.keyboardShortcut("r", modifiers: [.command])
+                Divider()
                 Button("Clear List") { model.clearView() }.keyboardShortcut("k", modifiers: [.command])
+            }
+            CommandMenu("Tools") {
+                Button("Throttling...") { /* Trigger throttling sheet */ }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                Button("Breakpoints...") { /* Trigger breakpoints sheet */ }
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
+                Divider()
+                Button("Session Management...") { /* Trigger session management */ }
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
             }
         }
     }

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["harness", "spikes/rust", "crates/np-model", "crates/np-engine", "crates/np-store", "crates/np-mock", "crates/netproxyd"]
+members = ["harness", "spikes/rust", "crates/np-model", "crates/np-engine", "crates/np-store", "crates/np-mock", "crates/netproxyd", "crates/np-mcp"]
 
 [workspace.package]
 edition = "2021"
