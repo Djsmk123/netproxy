@@ -31,6 +31,12 @@ struct MainView: View {
     @State private var showThrottling = false
     @State private var showBreakpoints = false
     @State private var showExport = false
+    @State private var showClearConfirmation = false
+    @State private var breakpointsEnabled = false
+    @State private var throttlingPreset: ThrottlePreset = .none
+    @State private var showToast = false
+    @State private var toastMessage = ""
+    @State private var toastIcon = "checkmark.circle.fill"
 
     var body: some View {
         @Bindable var model = model
@@ -51,36 +57,55 @@ struct MainView: View {
                 ToolbarItemGroup(placement: .primaryAction) {
                     CaptureButton()
 
-                    Menu {
-                        Button("Clear Current View") {
-                            model.clearView()
-                        }
-                        Button("Clear by Host...") {
-                            showSessionManagement = true
-                        }
-                        Divider()
-                        Button("Clear All", role: .destructive) {
-                            model.clearView()
-                        }
+                    Button {
+                        showClearConfirmation = true
                     } label: {
                         Label("Clear", systemImage: "trash")
                     }
-                    .help("Clear sessions")
+                    .help("Clear current view")
+                    .disabled(model.flows.isEmpty)
 
-                    Button { showThrottling = true } label: {
+                    // Simplified throttling dropdown
+                    Menu {
+                        ForEach(ThrottlePreset.allCases, id: \.self) { preset in
+                            Button {
+                                throttlingPreset = preset
+                                if preset != .none {
+                                    showToast(message: "Throttling: \(preset.displayName)", icon: "speedometer")
+                                } else {
+                                    showToast(message: "Throttling disabled", icon: "checkmark.circle.fill")
+                                }
+                            } label: {
+                                HStack {
+                                    Text(preset.displayName)
+                                    if throttlingPreset == preset {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
                         Label("Throttling", systemImage: "speedometer")
                     }
-                    .help("Bandwidth throttling")
+                    .help("Network throttling")
 
-                    Button { showBreakpoints = true } label: {
-                        Label("Breakpoints", systemImage: "pause.circle")
+                    // Simplified breakpoints toggle
+                    Toggle(isOn: $breakpointsEnabled) {
+                        Label("Breakpoints", systemImage: breakpointsEnabled ? "pause.circle.fill" : "pause.circle")
                     }
-                    .help("Request/Response breakpoints")
+                    .help("Enable breakpoints")
+                    .onChange(of: breakpointsEnabled) { _, enabled in
+                        showToast(message: enabled ? "Breakpoints enabled" : "Breakpoints disabled",
+                                 icon: enabled ? "pause.circle.fill" : "checkmark.circle.fill")
+                    }
 
-                    Button { showExport = true } label: {
+                    Button {
+                        showExport = true
+                    } label: {
                         Label("Export", systemImage: "square.and.arrow.up")
                     }
-                    .help("Export HAR or other formats")
+                    .help("Export HAR or other formats (⌘⇧E)")
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(model.flows.isEmpty)
 
                     Button { showDiagnostics = true } label: {
@@ -96,7 +121,10 @@ struct MainView: View {
                 }
             }
 
-            StatusBarView()
+            StatusBarView(
+                throttlingStatus: throttlingPreset != .none ? throttlingPreset.rawValue : nil,
+                breakpointsEnabled: breakpointsEnabled
+            )
         }
         #if DEBUG
         .task {
@@ -112,11 +140,50 @@ struct MainView: View {
         #endif
         .sheet(isPresented: $showSetup) { DeviceSetupView() }
         .sheet(isPresented: $showDiagnostics) { DiagnosticsView() }
-        .sheet(isPresented: $showSessionManagement) { SessionManagementView() }
-        .sheet(isPresented: $showThrottling) { ThrottlingView() }
-        .sheet(isPresented: $showBreakpoints) { BreakpointsView() }
         .sheet(isPresented: $showExport) { ExportView() }
+        .confirmationDialog(
+            "Clear All Flows?",
+            isPresented: $showClearConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear \(model.flows.count) flows", role: .destructive) {
+                model.clearView()
+                showToast(message: "Cleared \(model.flows.count) flows from view", icon: "checkmark.circle.fill")
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will remove all \(model.flows.count) flows from the current view. The data remains in session storage.")
+        }
         .overlay(alignment: .top) { Banners() }
+        .overlay(alignment: .bottom) {
+            if showToast {
+                ToastView(message: toastMessage, icon: toastIcon)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 50)
+            }
+        }
+        // Hidden buttons for keyboard shortcuts
+        .background {
+            Button("Toggle Breakpoints") {
+                breakpointsEnabled.toggle()
+            }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
+            .hidden()
+        }
+    }
+
+    private func showToast(message: String, icon: String) {
+        toastMessage = message
+        toastIcon = icon
+        withAnimation(.spring(response: 0.3)) {
+            showToast = true
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            withAnimation(.spring(response: 0.3)) {
+                showToast = false
+            }
+        }
     }
 }
 
@@ -153,5 +220,57 @@ struct Banners: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(color.opacity(0.4)))
+    }
+}
+
+// MARK: - Throttle Presets
+
+enum ThrottlePreset: String, CaseIterable {
+    case none = "No Throttling"
+    case threeG = "3G (750 KB/s)"
+    case fourG = "4G (4 MB/s)"
+    case wifi = "WiFi (20 MB/s)"
+    case custom = "Custom..."
+
+    var displayName: String { rawValue }
+
+    var downloadSpeed: Int {
+        switch self {
+        case .none: return 0
+        case .threeG: return 750
+        case .fourG: return 4096
+        case .wifi: return 20480
+        case .custom: return 0
+        }
+    }
+
+    var uploadSpeed: Int {
+        switch self {
+        case .none: return 0
+        case .threeG: return 384
+        case .fourG: return 2048
+        case .wifi: return 10240
+        case .custom: return 0
+        }
+    }
+}
+
+// MARK: - Toast View
+
+struct ToastView: View {
+    let message: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(.green)
+            Text(message)
+                .font(.callout)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
     }
 }

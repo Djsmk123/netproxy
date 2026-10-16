@@ -3,6 +3,8 @@ import NetProxyKit
 
 struct StatusBarView: View {
     @Environment(CaptureModel.self) private var model
+    var throttlingStatus: String?
+    var breakpointsEnabled: Bool = false
 
     var body: some View {
         HStack(spacing: 16) {
@@ -78,6 +80,30 @@ struct StatusBarView: View {
             }
 
             Spacer()
+
+            // Throttling indicator
+            if let status = throttlingStatus {
+                HStack(spacing: 4) {
+                    Image(systemName: "tortoise.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Text(status)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            // Breakpoints indicator
+            if breakpointsEnabled {
+                HStack(spacing: 4) {
+                    Image(systemName: "pause.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.purple)
+                    Text("Breakpoints")
+                        .font(.caption)
+                        .foregroundStyle(.purple)
+                }
+            }
 
             // Filter indicator
             if model.filter.isActive {

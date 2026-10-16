@@ -81,13 +81,13 @@ struct NetProxyApp: App {
                 Button("Clear List") { model.clearView() }.keyboardShortcut("k", modifiers: [.command])
             }
             CommandMenu("Tools") {
-                Button("Throttling...") { /* Trigger throttling sheet */ }
-                    .keyboardShortcut("t", modifiers: [.command, .shift])
-                Button("Breakpoints...") { /* Trigger breakpoints sheet */ }
+                Button("Toggle Breakpoints") { }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
+                    .disabled(true) // Handled by MainView
                 Divider()
-                Button("Session Management...") { /* Trigger session management */ }
-                    .keyboardShortcut("m", modifiers: [.command, .shift])
+                Button("Export...") { }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(true) // Handled by MainView
             }
         }
     }
