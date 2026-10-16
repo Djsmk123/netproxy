@@ -506,6 +506,176 @@ async fn dispatch(
             let issues = registry.validate_all();
             Ok(json!({"issues": issues}))
         }
+        "mocks.from_flow" => {
+            #[derive(Deserialize)]
+            struct P {
+                run: Option<String>,
+                flow: u64,
+                #[serde(default)]
+                priority: Option<i32>,
+                #[serde(default)]
+                enabled: Option<bool>,
+                #[serde(default)]
+                inline_threshold: Option<usize>,
+                #[serde(default)]
+                match_query: Option<bool>,
+                #[serde(default)]
+                match_headers: Option<Vec<String>>,
+                #[serde(default)]
+                write_fixtures: bool,
+            }
+            let P {
+                run,
+                flow,
+                priority,
+                enabled,
+                inline_threshold,
+                match_query,
+                match_headers,
+                write_fixtures,
+            } = p(params)?;
+
+            let run = resolve_run(run)?;
+
+            tracing::info!(client, run = %run, flow, "mocks.from_flow");
+
+            // Get fixtures directory
+            let fixtures_dir = d.mock_config_path()
+                .and_then(|p| p.parent())
+                .map(|p| p.join("fixtures"))
+                .unwrap_or_else(|| d.data_dir().join("fixtures"));
+
+            let options = crate::flow_converter::ConvertOptions {
+                fixtures_dir: fixtures_dir.clone(),
+                inline_threshold: inline_threshold.unwrap_or(1024),
+                priority: priority.unwrap_or(100),
+                enabled: enabled.unwrap_or(true),
+                match_query: match_query.unwrap_or(false),
+                match_headers: match_headers.unwrap_or_default(),
+            };
+
+            // Convert flow to mock
+            let store = d.store.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                let reader = store.reader()?;
+                crate::flow_converter::convert_flow(&reader, &run, flow, &options)
+            })
+            .await
+            .map_err(|e| app(e))?
+            .map_err(app)?;
+
+            // Write fixtures if requested
+            if write_fixtures && !result.fixtures.is_empty() {
+                std::fs::create_dir_all(&fixtures_dir)
+                    .map_err(|e| app(format!("failed to create fixtures directory: {}", e)))?;
+
+                for fixture in &result.fixtures {
+                    let path = fixtures_dir.join(&fixture.path);
+                    std::fs::write(&path, &fixture.content)
+                        .map_err(|e| app(format!("failed to write fixture {}: {}", fixture.path, e)))?;
+                }
+            }
+
+            Ok(json!({
+                "rule": result.rule,
+                "fixtures": result.fixtures.iter().map(|f| json!({
+                    "path": f.path,
+                    "size": f.size,
+                    "content_type": f.content_type,
+                })).collect::<Vec<_>>(),
+                "warnings": result.warnings,
+                "fixtures_written": write_fixtures && !result.fixtures.is_empty(),
+            }))
+        }
+        "mocks.from_flow_and_add" => {
+            #[derive(Deserialize)]
+            struct P {
+                run: Option<String>,
+                flow: u64,
+                #[serde(default)]
+                priority: Option<i32>,
+                #[serde(default)]
+                enabled: Option<bool>,
+                #[serde(default)]
+                inline_threshold: Option<usize>,
+                #[serde(default)]
+                match_query: Option<bool>,
+                #[serde(default)]
+                match_headers: Option<Vec<String>>,
+            }
+            let P {
+                run,
+                flow,
+                priority,
+                enabled,
+                inline_threshold,
+                match_query,
+                match_headers,
+            } = p(params)?;
+
+            let run_resolved = resolve_run(run)?;
+
+            tracing::info!(client, run = %run_resolved, flow, "mocks.from_flow_and_add");
+
+            // Get fixtures directory
+            let fixtures_dir = d.mock_config_path()
+                .and_then(|p| p.parent())
+                .map(|p| p.join("fixtures"))
+                .unwrap_or_else(|| d.data_dir().join("fixtures"));
+
+            let options = crate::flow_converter::ConvertOptions {
+                fixtures_dir: fixtures_dir.clone(),
+                inline_threshold: inline_threshold.unwrap_or(1024),
+                priority: priority.unwrap_or(100),
+                enabled: enabled.unwrap_or(true),
+                match_query: match_query.unwrap_or(false),
+                match_headers: match_headers.unwrap_or_default(),
+            };
+
+            // Convert flow to mock
+            let store = d.store.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                let reader = store.reader()?;
+                crate::flow_converter::convert_flow(&reader, &run_resolved, flow, &options)
+            })
+            .await
+            .map_err(|e| app(e))?
+            .map_err(app)?;
+
+            // Write fixtures
+            if !result.fixtures.is_empty() {
+                std::fs::create_dir_all(&fixtures_dir)
+                    .map_err(|e| app(format!("failed to create fixtures directory: {}", e)))?;
+
+                for fixture in &result.fixtures {
+                    let path = fixtures_dir.join(&fixture.path);
+                    std::fs::write(&path, &fixture.content)
+                        .map_err(|e| app(format!("failed to write fixture {}: {}", fixture.path, e)))?;
+                }
+            }
+
+            // Add the rule to the registry
+            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+
+            // Validate before adding
+            let issues = registry.validate_rule(&result.rule);
+            let errors: Vec<_> = issues.iter()
+                .filter(|i| matches!(i.severity, np_mock::Severity::Error))
+                .collect();
+
+            if !errors.is_empty() {
+                return Err(app(format!("validation errors: {:?}", errors)));
+            }
+
+            registry.add_rule(result.rule.clone()).map_err(app)?;
+
+            Ok(json!({
+                "success": true,
+                "rule": result.rule,
+                "fixtures_written": !result.fixtures.is_empty(),
+                "warnings": result.warnings,
+            }))
+        }
         other => Err((E_METHOD, format!("unknown method {other}"))),
     }
 }

@@ -315,6 +315,16 @@ impl Daemon {
         self.mock_registry.clone()
     }
 
+    /// Get the data directory path.
+    pub fn data_dir(&self) -> &std::path::Path {
+        &self.cfg.data_dir
+    }
+
+    /// Get the mock config path if configured.
+    pub fn mock_config_path(&self) -> Option<&std::path::Path> {
+        self.cfg.mock_config_path.as_deref()
+    }
+
     /// Latest run id known to the store (current run if running).
     pub fn current_or_latest_run(&self) -> Option<String> {
         if let Some(r) = self.status.lock().unwrap().run.clone() {

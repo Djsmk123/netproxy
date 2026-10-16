@@ -48,13 +48,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `tracing` dependency to `np-mock`
 - Added `notify` crate for file watching
 
-### In Progress (M4 Phase 2)
-- **Flow-to-Mock Conversion** (Designed, implementation pending)
-  - Convert captured HTTP flows to mock rules
-  - Extract response bodies as fixtures
-  - Smart match pattern generation
-  - Control API: `mocks.from_flow`, `mocks.from_flow_and_add`
-  - See `docs/m4-phase2-flow-conversion.md` for design
+### Added (M4 Phase 2) - 2026-10-17
+- **Flow-to-Mock Conversion** ✅ Complete
+  - Convert captured HTTP request/response flows to mock rules
+  - Extract response bodies as fixture files (text/binary support)
+  - Smart match pattern generation (host, path, method, query, headers)
+  - Configurable inline threshold for small bodies
+  - **Control API - 2 New Methods:**
+    - `mocks.from_flow` - Convert flow to rule (preview mode)
+    - `mocks.from_flow_and_add` - Convert, validate, and add atomically
+  - **Flow Converter Module** (`netproxyd/src/flow_converter.rs`)
+    - Extracts request/response from event stream
+    - Content-type based fixture naming (.json, .html, .png, etc.)
+    - Header filtering (skips hop-by-hop headers)
+    - UTF-8 detection for text content
+    - Comprehensive warning messages
+  - **Features:**
+    - Query parameter matching (optional)
+    - Header-based matching (configurable)
+    - Fixture file auto-generation
+    - Base64 preview body decoding
+    - Validation before adding to registry
+  - See `docs/m4-phase2-flow-conversion.md` for complete guide
 
 ### Planned (M4 Phase 3+)
 - Smart pattern extraction (detect IDs, UUIDs, slugs)
