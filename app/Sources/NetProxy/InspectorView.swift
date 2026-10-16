@@ -212,7 +212,13 @@ struct MessagePane: View {
                     if let img = NSImage(data: d.data) {
                         ScrollView([.horizontal, .vertical]) { Image(nsImage: img).padding() }
                     } else { Text("Image could not be displayed").foregroundStyle(.secondary).padding() }
-                case .json, .text, .form: textView(for: d)
+                case .json:
+                    if mode == .pretty {
+                        JSONViewer(json: d.text ?? String(decoding: d.data, as: UTF8.self))
+                    } else {
+                        textView(for: d)
+                    }
+                case .text, .form: textView(for: d)
                 case .binary: monospaced(mode == .hex || true ? BodyDecoder.hexDump(d.data) : "")
                 }
             }
