@@ -142,17 +142,20 @@ struct MainView: View {
         .sheet(isPresented: $showDiagnostics) { DiagnosticsView() }
         .sheet(isPresented: $showExport) { ExportView() }
         .confirmationDialog(
-            "Clear All Flows?",
+            "Delete Session Data?",
             isPresented: $showClearConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Clear \(model.flows.count) flows", role: .destructive) {
-                model.clearView()
-                showToast(message: "Cleared \(model.flows.count) flows from view", icon: "checkmark.circle.fill")
+            Button("Delete \(model.flows.count) flows permanently", role: .destructive) {
+                let count = model.flows.count
+                Task {
+                    await model.deleteCurrentSession()
+                    showToast(message: "Deleted \(count) flows from database", icon: "checkmark.circle.fill")
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will remove all \(model.flows.count) flows from the current view. The data remains in session storage.")
+            Text("This will permanently delete all \(model.flows.count) flows and events from this session. This cannot be undone.")
         }
         .overlay(alignment: .top) { Banners() }
         .overlay(alignment: .bottom) {

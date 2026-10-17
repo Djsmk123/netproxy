@@ -336,6 +336,16 @@ async fn dispatch(
             let store = d.store.clone();
             blocking(move || store.reader()?.runs()).await
         }
+        "runs.delete" => {
+            #[derive(Deserialize)]
+            struct P { run: String }
+            let P { run } = p(params)?;
+            tracing::info!(client, %run, "runs.delete");
+            let store = d.store.clone();
+            let run_id = run.clone();
+            blocking(move || store.delete_run(&run_id)).await?;
+            Ok(json!({"deleted": run}))
+        }
         "flows.list" => {
             #[derive(Deserialize, Default)]
             struct P { #[serde(default)] filter: FlowFilter, limit: Option<usize>, cursor: Option<Cursor> }

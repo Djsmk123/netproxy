@@ -359,4 +359,22 @@ public final class CaptureModel {
     }
 
     public func clearView() { flows = []; selection = nil }
+
+    /// Delete the current session's data from the database
+    public func deleteCurrentSession() async {
+        guard let c = client, let run = effectiveRun else { return }
+        do {
+            try await c.callVoid("runs.delete", ["run": run])
+            flows = []
+            selection = nil
+            await refreshRuns()
+            // Select the next available run if any
+            if let nextRun = runs.first?.run {
+                selectedRun = nextRun
+                await switchRun()
+            }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
 }

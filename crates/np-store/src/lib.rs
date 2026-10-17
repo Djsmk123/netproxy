@@ -192,6 +192,17 @@ impl Store {
         rep.bytes_after = used_bytes(&c)?;
         Ok(rep)
     }
+
+    /// Delete a specific run and all its associated data.
+    pub fn delete_run(&self, run: &str) -> Result<()> {
+        let c = Connection::open(&*self.path)?;
+        configure(&c)?;
+        c.execute("DELETE FROM events WHERE run = ?1", [run])?;
+        c.execute("DELETE FROM flows WHERE run = ?1", [run])?;
+        c.execute("DELETE FROM runs WHERE run = ?1", [run])?;
+        let _ = c.pragma_update(None, "wal_checkpoint", "TRUNCATE");
+        Ok(())
+    }
 }
 
 /// One bounded deletion step, oldest data first. Returns false when there is nothing left to delete
