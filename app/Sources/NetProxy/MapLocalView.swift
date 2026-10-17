@@ -184,19 +184,24 @@ struct MapLocalView: View {
 
     private func createMapping() {
         Task {
-            // TODO: Implement actual mock creation via Control API
-            // For now, just show success and close
+            let success = await model.createMapLocal(
+                urlPattern: urlPattern,
+                localFilePath: localFilePath,
+                contentType: contentType,
+                statusCode: statusCode,
+                description: description,
+                enabled: enabled
+            )
 
-            print("Creating Map Local:")
-            print("  URL Pattern: \(urlPattern)")
-            print("  Local File: \(localFilePath)")
-            print("  Content-Type: \(contentType)")
-            print("  Status: \(statusCode)")
-            print("  Enabled: \(enabled)")
-
-            // TODO: Call model.createMapLocal() or similar
-
-            dismiss()
+            if success {
+                print("✅ Map Local created successfully!")
+                print("  URL Pattern: \(urlPattern)")
+                print("  Local File: \(localFilePath)")
+                dismiss()
+            } else {
+                print("❌ Failed to create Map Local rule")
+                // Could show an alert here
+            }
         }
     }
 }

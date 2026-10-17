@@ -185,19 +185,24 @@ struct MapRemoteView: View {
 
     private func createMapping() {
         Task {
-            // TODO: Implement actual redirect rule creation via Control API
-            // For now, just show success and close
+            let success = await model.createMapRemote(
+                fromPattern: fromPattern,
+                toURL: toURL,
+                preservePath: preservePath,
+                preserveQuery: preserveQuery,
+                description: description,
+                enabled: enabled
+            )
 
-            print("Creating Map Remote:")
-            print("  From: \(fromPattern)")
-            print("  To: \(toURL)")
-            print("  Preserve Path: \(preservePath)")
-            print("  Preserve Query: \(preserveQuery)")
-            print("  Enabled: \(enabled)")
-
-            // TODO: Call model.createMapRemote() or similar
-
-            dismiss()
+            if success {
+                print("✅ Map Remote created successfully!")
+                print("  From: \(fromPattern)")
+                print("  To: \(toURL)")
+                dismiss()
+            } else {
+                print("❌ Failed to create Map Remote rule")
+                // Could show an alert here
+            }
         }
     }
 }

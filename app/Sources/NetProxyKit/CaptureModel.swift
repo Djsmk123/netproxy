@@ -377,4 +377,120 @@ public final class CaptureModel {
             lastError = error.localizedDescription
         }
     }
+
+    // MARK: - Mock Management
+
+    /// Create a Map Local rule (serve local file instead of server response)
+    public func createMapLocal(
+        urlPattern: String,
+        localFilePath: String,
+        contentType: String,
+        statusCode: Int,
+        description: String,
+        enabled: Bool
+    ) async -> Bool {
+        guard let c = client else { return false }
+
+        // Parse URL pattern to extract host and path
+        let (host, path) = parseURLPattern(urlPattern)
+
+        // Generate unique rule ID
+        let ruleId = "map_local_\(UUID().uuidString.prefix(8))"
+
+        // Create rule JSON
+        let rule: [String: Any] = [
+            "id": ruleId,
+            "priority": 100,
+            "enabled": enabled,
+            "description": description.isEmpty ? "Map Local: \(urlPattern)" : description,
+            "match": [
+                "host": host ?? "*",
+                "path": path ?? "*"
+            ],
+            "action": [
+                "type": "respond",
+                "status": statusCode,
+                "headers": [
+                    "content-type": contentType
+                ],
+                "body": [
+                    "file": localFilePath
+                ]
+            ]
+        ]
+
+        do {
+            try await c.callVoid("mocks.add", ["rule": rule as [String: Any]])
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Create a Map Remote rule (redirect to different URL)
+    public func createMapRemote(
+        fromPattern: String,
+        toURL: String,
+        preservePath: Bool,
+        preserveQuery: Bool,
+        description: String,
+        enabled: Bool
+    ) async -> Bool {
+        guard let c = client else { return false }
+
+        // For now, Map Remote is implemented as a special mock
+        // that returns a redirect response
+        // TODO: Implement actual request forwarding in the backend
+
+        let (host, path) = parseURLPattern(fromPattern)
+        let ruleId = "map_remote_\(UUID().uuidString.prefix(8))"
+
+        let rule: [String: Any] = [
+            "id": ruleId,
+            "priority": 100,
+            "enabled": enabled,
+            "description": description.isEmpty ? "Map Remote: \(fromPattern) → \(toURL)" : description,
+            "match": [
+                "host": host ?? "*",
+                "path": path ?? "*"
+            ],
+            "action": [
+                "type": "respond",
+                "status": 307,  // Temporary Redirect
+                "headers": [
+                    "location": toURL
+                ],
+                "body": [
+                    "inline": "Redirected to \(toURL)"
+                ]
+            ]
+        ]
+
+        do {
+            try await c.callVoid("mocks.add", ["rule": rule as [String: Any]])
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Parse URL pattern into host and path components
+    private func parseURLPattern(_ pattern: String) -> (host: String?, path: String?) {
+        // Remove protocol if present
+        var p = pattern
+        if let range = p.range(of: "://") {
+            p = String(p[range.upperBound...])
+        }
+
+        // Split into host and path
+        if let slashIndex = p.firstIndex(of: "/") {
+            let host = String(p[..<slashIndex])
+            let path = String(p[slashIndex...])
+            return (host.isEmpty ? nil : host, path.isEmpty ? nil : path)
+        } else {
+            return (p.isEmpty ? nil : p, nil)
+        }
+    }
 }
