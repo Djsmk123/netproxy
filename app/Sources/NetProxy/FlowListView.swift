@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import NetProxyKit
 
 struct FlowListView: View {
@@ -42,19 +43,15 @@ struct FlowListView: View {
                 }
                 .contextMenu(forSelectionType: FlowRow.ID.self) { ids in
                     if let id = ids.first, let r = model.flows.first(where: { $0.id == id }) {
+                        // Breakpoint
+                        Button("Breakpoint on Request") {
+                            // TODO: Implement breakpoint
+                        }
+
+                        Divider()
+
+                        // Copy actions
                         Button("Copy URL") { copyToPasteboard(r.uri ?? "") }
-                        if let h = r.host {
-                            Button("Filter by Host: \(h)") { var f = FilterState(); f.host = h; model.filter = f }
-                        }
-                        if let m = r.method {
-                            Button("Filter by Method: \(m)") { var f = FilterState(); f.method = m; model.filter = f }
-                        }
-                        Divider()
-                        if let status = r.status {
-                            let statusClass = status / 100
-                            Button("Filter \(statusClass)xx Responses") { var f = FilterState(); f.statusClass = statusClass; model.filter = f }
-                        }
-                        Divider()
                         Button("Copy as cURL") {
                             Task {
                                 if let detail = await model.detail(for: r) {
@@ -67,6 +64,49 @@ struct FlowListView: View {
                                     copyToPasteboard(curl)
                                 }
                             }
+                        }
+
+                        Divider()
+
+                        // Save request/response
+                        Button("Save Request...") {
+                            Task {
+                                await saveRequest(for: r)
+                            }
+                        }
+                        Button("Save Response...") {
+                            Task {
+                                await saveResponse(for: r)
+                            }
+                        }
+                        Button("Save Both...") {
+                            Task {
+                                await saveRequestAndResponse(for: r)
+                            }
+                        }
+
+                        Divider()
+
+                        // Mocking
+                        Button("Map Local...") {
+                            // TODO: Open map local dialog
+                        }
+                        Button("Map Remote...") {
+                            // TODO: Open map remote dialog
+                        }
+
+                        Divider()
+
+                        // Filtering
+                        if let h = r.host {
+                            Button("Filter by Host: \(h)") { var f = FilterState(); f.host = h; model.filter = f }
+                        }
+                        if let m = r.method {
+                            Button("Filter by Method: \(m)") { var f = FilterState(); f.method = m; model.filter = f }
+                        }
+                        if let status = r.status {
+                            let statusClass = status / 100
+                            Button("Filter \(statusClass)xx Responses") { var f = FilterState(); f.statusClass = statusClass; model.filter = f }
                         }
                     }
                 }
@@ -93,6 +133,96 @@ struct FlowListView: View {
         }
         .font(.caption).foregroundStyle(.secondary)
         .padding(.horizontal, 10).padding(.vertical, 5).background(.bar)
+    }
+
+    // MARK: - Save Request/Response
+
+    private func saveRequest(for row: FlowRow) async {
+        guard let detail = await model.detail(for: row) else { return }
+        let headers = detail.events.lazy.compactMap { e -> Headers? in
+            if case .requestHead(let req) = e.event { return req.headers }
+            return nil
+        }.first ?? []
+        let body = await model.body(for: row, dir: BodyDir.req).data
+
+        let content = formatHTTP(method: row.method ?? "GET", url: row.uri ?? "", headers: headers, body: body)
+        saveToFile(content: content, suggestedName: "\(row.host ?? "request")_\(row.flow)_request.txt")
+    }
+
+    private func saveResponse(for row: FlowRow) async {
+        guard let detail = await model.detail(for: row) else { return }
+        let headers = detail.events.lazy.compactMap { e -> Headers? in
+            if case .responseHead(let resp) = e.event { return resp.headers }
+            return nil
+        }.first ?? []
+        let body = await model.body(for: row, dir: BodyDir.res).data
+
+        let content = formatHTTPResponse(status: row.status ?? 0, headers: headers, body: body)
+        saveToFile(content: content, suggestedName: "\(row.host ?? "response")_\(row.flow)_response.txt")
+    }
+
+    private func saveRequestAndResponse(for row: FlowRow) async {
+        guard let detail = await model.detail(for: row) else { return }
+
+        let reqHeaders = detail.events.lazy.compactMap { e -> Headers? in
+            if case .requestHead(let req) = e.event { return req.headers }
+            return nil
+        }.first ?? []
+        let reqBody = await model.body(for: row, dir: .req).data
+
+        let respHeaders = detail.events.lazy.compactMap { e -> Headers? in
+            if case .responseHead(let resp) = e.event { return resp.headers }
+            return nil
+        }.first ?? []
+        let respBody = await model.body(for: row, dir: .res).data
+
+        var content = "REQUEST\n"
+        content += "=======\n\n"
+        content += formatHTTP(method: row.method ?? "GET", url: row.uri ?? "", headers: reqHeaders, body: reqBody)
+        content += "\n\n\nRESPONSE\n"
+        content += "========\n\n"
+        content += formatHTTPResponse(status: row.status ?? 0, headers: respHeaders, body: respBody)
+
+        saveToFile(content: content, suggestedName: "\(row.host ?? "flow")_\(row.flow).txt")
+    }
+
+    private func formatHTTP(method: String, url: String, headers: Headers, body: Data) -> String {
+        var text = "\(method) \(url) HTTP/1.1\n"
+        for header in headers {
+            if header.count >= 2 {
+                text += "\(header[0]): \(header[1])\n"
+            }
+        }
+        text += "\n"
+        if !body.isEmpty {
+            text += String(data: body, encoding: .utf8) ?? "[Binary data: \(body.count) bytes]"
+        }
+        return text
+    }
+
+    private func formatHTTPResponse(status: Int, headers: Headers, body: Data) -> String {
+        var text = "HTTP/1.1 \(status)\n"
+        for header in headers {
+            if header.count >= 2 {
+                text += "\(header[0]): \(header[1])\n"
+            }
+        }
+        text += "\n"
+        if !body.isEmpty {
+            text += String(data: body, encoding: .utf8) ?? "[Binary data: \(body.count) bytes]"
+        }
+        return text
+    }
+
+    private func saveToFile(content: String, suggestedName: String) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggestedName
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                try? content.write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
     }
 
     @ViewBuilder private var emptyState: some View {
