@@ -4,6 +4,9 @@ import NetProxyKit
 
 struct FlowListView: View {
     @Environment(CaptureModel.self) private var model
+    @State private var showMapLocal = false
+    @State private var showMapRemote = false
+    @State private var selectedFlowForMapping: FlowRow?
 
     var body: some View {
         @Bindable var model = model
@@ -89,10 +92,12 @@ struct FlowListView: View {
 
                         // Mocking
                         Button("Map Local...") {
-                            // TODO: Open map local dialog
+                            selectedFlowForMapping = r
+                            showMapLocal = true
                         }
                         Button("Map Remote...") {
-                            // TODO: Open map remote dialog
+                            selectedFlowForMapping = r
+                            showMapRemote = true
                         }
 
                         Divider()
@@ -111,6 +116,16 @@ struct FlowListView: View {
                     }
                 }
                 footer
+            }
+        }
+        .sheet(isPresented: $showMapLocal) {
+            if let flow = selectedFlowForMapping {
+                MapLocalView(flow: flow)
+            }
+        }
+        .sheet(isPresented: $showMapRemote) {
+            if let flow = selectedFlowForMapping {
+                MapRemoteView(flow: flow)
             }
         }
     }
