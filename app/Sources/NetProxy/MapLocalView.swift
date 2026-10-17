@@ -15,6 +15,8 @@ struct MapLocalView: View {
     @State private var enabled: Bool = true
     @State private var description: String = ""
     @State private var showFilePicker = false
+    @State private var isCreating = false
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -110,21 +112,37 @@ struct MapLocalView: View {
             }
 
             // Footer buttons
-            HStack {
-                Button("Cancel") {
-                    dismiss()
+            VStack(spacing: 0) {
+                if let error = errorMessage {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color.orange.opacity(0.1))
                 }
-                .keyboardShortcut(.cancelAction)
 
-                Spacer()
+                HStack {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
 
-                Button("Create Mapping") {
-                    createMapping()
+                    Spacer()
+
+                    Button(isCreating ? "Creating..." : "Create Mapping") {
+                        createMapping()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(urlPattern.isEmpty || localFilePath.isEmpty || isCreating)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(urlPattern.isEmpty || localFilePath.isEmpty)
+                .padding()
             }
-            .padding()
             .background(.regularMaterial)
         }
         .frame(width: 600, height: 500)
@@ -183,7 +201,16 @@ struct MapLocalView: View {
     }
 
     private func createMapping() {
-        Task {
+        Task { @MainActor in
+            isCreating = true
+            errorMessage = nil
+
+            print("🔧 Creating Map Local mapping...")
+            print("  URL Pattern: \(urlPattern)")
+            print("  Local File: \(localFilePath)")
+            print("  Content-Type: \(contentType)")
+            print("  Status Code: \(statusCode)")
+
             let success = await model.createMapLocal(
                 urlPattern: urlPattern,
                 localFilePath: localFilePath,
@@ -193,14 +220,14 @@ struct MapLocalView: View {
                 enabled: enabled
             )
 
+            isCreating = false
+
             if success {
                 print("✅ Map Local created successfully!")
-                print("  URL Pattern: \(urlPattern)")
-                print("  Local File: \(localFilePath)")
                 dismiss()
             } else {
                 print("❌ Failed to create Map Local rule")
-                // Could show an alert here
+                errorMessage = model.lastError ?? "Failed to create mapping"
             }
         }
     }

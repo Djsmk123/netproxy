@@ -13,6 +13,8 @@ struct MapRemoteView: View {
     @State private var preserveQuery: Bool = true
     @State private var enabled: Bool = true
     @State private var description: String = ""
+    @State private var isCreating = false
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,21 +130,37 @@ struct MapRemoteView: View {
             }
 
             // Footer buttons
-            HStack {
-                Button("Cancel") {
-                    dismiss()
+            VStack(spacing: 0) {
+                if let error = errorMessage {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color.orange.opacity(0.1))
                 }
-                .keyboardShortcut(.cancelAction)
 
-                Spacer()
+                HStack {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
 
-                Button("Create Mapping") {
-                    createMapping()
+                    Spacer()
+
+                    Button(isCreating ? "Creating..." : "Create Mapping") {
+                        createMapping()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(fromPattern.isEmpty || toURL.isEmpty || isCreating)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(fromPattern.isEmpty || toURL.isEmpty)
+                .padding()
             }
-            .padding()
             .background(.regularMaterial)
         }
         .frame(width: 650, height: 550)
@@ -184,7 +202,16 @@ struct MapRemoteView: View {
     }
 
     private func createMapping() {
-        Task {
+        Task { @MainActor in
+            isCreating = true
+            errorMessage = nil
+
+            print("🔧 Creating Map Remote mapping...")
+            print("  From: \(fromPattern)")
+            print("  To: \(toURL)")
+            print("  Preserve Path: \(preservePath)")
+            print("  Preserve Query: \(preserveQuery)")
+
             let success = await model.createMapRemote(
                 fromPattern: fromPattern,
                 toURL: toURL,
@@ -194,14 +221,14 @@ struct MapRemoteView: View {
                 enabled: enabled
             )
 
+            isCreating = false
+
             if success {
                 print("✅ Map Remote created successfully!")
-                print("  From: \(fromPattern)")
-                print("  To: \(toURL)")
                 dismiss()
             } else {
                 print("❌ Failed to create Map Remote rule")
-                // Could show an alert here
+                errorMessage = model.lastError ?? "Failed to create mapping"
             }
         }
     }
