@@ -121,11 +121,13 @@ struct FlowListView: View {
         .sheet(isPresented: $showMapLocal) {
             if let flow = selectedFlowForMapping {
                 MapLocalView(flow: flow)
+                    .environment(model)
             }
         }
         .sheet(isPresented: $showMapRemote) {
             if let flow = selectedFlowForMapping {
                 MapRemoteView(flow: flow)
+                    .environment(model)
             }
         }
     }
