@@ -115,7 +115,7 @@ swift run
 
 ### 📖 Complete Documentation
 
-**[📘 View Full Documentation Wiki →](docs/wiki.html)**
+**[📘 View Full Documentation Wiki →](https://djsmk123.github.io/netproxy/)**
 
 Or browse by category:
 - **Setup Guides:** iOS, MCP, Claude integration
@@ -338,7 +338,7 @@ Built with:
 
 ## 📞 Support
 
-- **Documentation:** [docs/wiki.html](docs/wiki.html)
+- **Documentation:** [https://djsmk123.github.io/netproxy/](https://djsmk123.github.io/netproxy/)
 - **Issues:** [GitHub Issues](https://github.com/Djsmk123/netproxy/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/Djsmk123/netproxy/discussions)
 
