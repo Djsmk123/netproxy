@@ -192,7 +192,7 @@ struct CaptureButton: View {
     var body: some View {
         let running = model.status?.isRunning == true
         Button {
-            Task { running ? await model.stopCapture() : await model.startCapture() }
+            Task { running ? await model.stopCapture() : await model.startCapture(allowDevices: model.listenAllInterfaces) }
         } label: {
             Label(running ? "Stop" : "Record", systemImage: running ? "stop.circle.fill" : "record.circle")
                 .foregroundStyle(running ? Color.red : Color.primary)

@@ -125,8 +125,15 @@ public final class CaptureModel {
             status = st
             lastError = nil
             await refreshRuns()
-            selectedRun = nil
-            await switchRun()
+            // Don't auto-switch to new empty run - let users keep seeing previous flows
+            // Only switch if there were no flows before
+            if flows.isEmpty {
+                selectedRun = nil
+                await switchRun()
+            } else {
+                // Just attach to new run for live updates
+                await attachLive()
+            }
         } catch { lastError = error.localizedDescription }
     }
 

@@ -75,7 +75,7 @@ struct NetProxyApp: App {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Capture") {
                 Button(model.status?.isRunning == true ? "Stop Capture" : "Start Capture") {
-                    Task { if model.status?.isRunning == true { await model.stopCapture() } else { await model.startCapture() } }
+                    Task { if model.status?.isRunning == true { await model.stopCapture() } else { await model.startCapture(allowDevices: model.listenAllInterfaces) } }
                 }.keyboardShortcut("r", modifiers: [.command])
                 Divider()
                 Button("Clear List") { model.clearView() }.keyboardShortcut("k", modifiers: [.command])

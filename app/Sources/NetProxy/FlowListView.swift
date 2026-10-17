@@ -113,7 +113,7 @@ struct FlowListView: View {
             } description: {
                 Text("Start capturing to see HTTP and HTTPS requests here.")
             } actions: {
-                Button("Start Capture") { Task { await model.startCapture() } }.buttonStyle(.borderedProminent)
+                Button("Start Capture") { Task { await model.startCapture(allowDevices: model.listenAllInterfaces) } }.buttonStyle(.borderedProminent)
             }
         }
     }
