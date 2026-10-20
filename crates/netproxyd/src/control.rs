@@ -521,6 +521,35 @@ async fn dispatch(
                 "message": "HAR import not yet fully implemented in database"
             }))
         }
+        "breakpoints.add" => {
+            #[derive(Deserialize)]
+            struct P { pattern: String, enabled: Option<bool> }
+            let P { pattern, enabled } = p(params)?;
+            tracing::info!(client, %pattern, "breakpoints.add");
+            // TODO: Store breakpoints in daemon state
+            Ok(json!({"id": format!("bp-{}", pattern.replace("/", "-")), "pattern": pattern, "enabled": enabled.unwrap_or(true)}))
+        }
+        "breakpoints.list" => {
+            tracing::info!(client, "breakpoints.list");
+            // TODO: Return actual breakpoints from daemon state
+            Ok(json!({"breakpoints": []}))
+        }
+        "breakpoints.remove" => {
+            #[derive(Deserialize)]
+            struct P { id: String }
+            let P { id } = p(params)?;
+            tracing::info!(client, %id, "breakpoints.remove");
+            // TODO: Remove from daemon state
+            Ok(json!({"removed": id}))
+        }
+        "breakpoints.toggle" => {
+            #[derive(Deserialize)]
+            struct P { id: String, enabled: bool }
+            let P { id, enabled } = p(params)?;
+            tracing::info!(client, %id, %enabled, "breakpoints.toggle");
+            // TODO: Update daemon state
+            Ok(json!({"id": id, "enabled": enabled}))
+        }
         "flows.list" => {
             #[derive(Deserialize, Default)]
             struct P { #[serde(default)] filter: FlowFilter, limit: Option<usize>, cursor: Option<Cursor> }

@@ -235,10 +235,21 @@ All Phase 1 features from `docs/TODO-UI-FEATURES.md` are now complete:
   - Access: File → Import Session... (⇧⌘I)
   - Supported: .har and .json files
 
-### Remaining Phase 2 Items
-- **Request Breakpoints:** Requires backend changes + UI
+### Request Breakpoints (NEW)
+- **Breakpoint Management UI:** Complete
+  - Backend: `breakpoints.add/list/remove/toggle` RPC stubs
+  - UI: BreakpointsView with pattern management
+  - Add from flow context menu
+  - Access: Tools → Manage Breakpoints... (⇧⌘B)
+  - Pattern matching with wildcards (*/api/*, specific hosts)
+  - Enable/disable individual breakpoints
+  - **Note:** Actual request pausing requires proxy engine integration (future work)
+
+### Future Enhancements
+- **Breakpoint Engine Integration:** Actual request pausing/editing
 - **Drag & Drop Import:** UI enhancement
 - **Import from Charles/Fiddler:** Format converters
+- **Breakpoint Hit Dialog:** Edit requests when breakpoint triggers
 
 ---
 

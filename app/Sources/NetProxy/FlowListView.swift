@@ -7,6 +7,8 @@ struct FlowListView: View {
     @State private var showMapLocal = false
     @State private var showMapRemote = false
     @State private var selectedFlowForMapping: FlowRow?
+    @State private var breakpointPattern: String?
+    @State private var showBreakpointAdded = false
 
     var body: some View {
         @Bindable var model = model
@@ -47,8 +49,12 @@ struct FlowListView: View {
                 .contextMenu(forSelectionType: FlowRow.ID.self) { ids in
                     if let id = ids.first, let r = model.flows.first(where: { $0.id == id }) {
                         // Breakpoint
-                        Button("Breakpoint on Request") {
-                            // TODO: Implement breakpoint
+                        Button("Add Breakpoint...") {
+                            if let uri = r.uri {
+                                // Extract pattern from URI
+                                let pattern = uri.components(separatedBy: "?").first ?? uri
+                                addBreakpointPattern(pattern)
+                            }
                         }
 
                         Divider()
@@ -261,6 +267,25 @@ struct FlowListView: View {
                 Text("Start capturing to see HTTP and HTTPS requests here.")
             } actions: {
                 Button("Start Capture") { Task { await model.startCapture(allowDevices: model.listenAllInterfaces) } }.buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func addBreakpointPattern(_ pattern: String) {
+        breakpointPattern = pattern
+
+        Task {
+            guard let client = model.client else { return }
+            do {
+                let params: [String: any Sendable] = ["pattern": pattern, "enabled": true]
+                try await client.callVoid("breakpoints.add", params)
+                showBreakpointAdded = true
+
+                // Hide after 2 seconds
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                showBreakpointAdded = false
+            } catch {
+                // Silently fail
             }
         }
     }

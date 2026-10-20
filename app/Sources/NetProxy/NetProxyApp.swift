@@ -59,6 +59,7 @@ struct NetProxyApp: App {
     @State private var showMockManager = false
     @State private var showExport = false
     @State private var showImport = false
+    @State private var showBreakpoints = false
 
     var body: some Scene {
         WindowGroup("NetProxy") {
@@ -95,6 +96,10 @@ struct NetProxyApp: App {
                 }
                 .sheet(isPresented: $showImport) {
                     ImportView()
+                        .environment(model)
+                }
+                .sheet(isPresented: $showBreakpoints) {
+                    BreakpointsView()
                         .environment(model)
                 }
         }
@@ -146,9 +151,8 @@ struct NetProxyApp: App {
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
                 Divider()
-                Button("Toggle Breakpoints") { }
+                Button("Manage Breakpoints...") { showBreakpoints = true }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
-                    .disabled(true)
                 Divider()
                 Button("Export...") { showExport = true }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
