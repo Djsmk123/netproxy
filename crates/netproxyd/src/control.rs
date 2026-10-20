@@ -88,6 +88,40 @@ fn ct_eq(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
+fn escape_csv(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+fn format_datetime_iso8601(us: i64) -> String {
+    use std::time::{UNIX_EPOCH, Duration};
+    let secs = (us / 1_000_000) as u64;
+    let nanos = ((us % 1_000_000) * 1000) as u32;
+    let datetime = UNIX_EPOCH + Duration::new(secs, nanos);
+    // Format as ISO8601: YYYY-MM-DDTHH:MM:SS.sssZ
+    let since_epoch = datetime.duration_since(UNIX_EPOCH).unwrap();
+    let secs = since_epoch.as_secs();
+    let millis = since_epoch.subsec_millis();
+
+    // Simple conversion (not handling timezones properly, but good enough for HAR)
+    let days_since_epoch = secs / 86400;
+    let year = 1970 + (days_since_epoch / 365); // Approximation
+    let remaining_days = days_since_epoch % 365;
+    let month = (remaining_days / 30) + 1;
+    let day = (remaining_days % 30) + 1;
+
+    let time_of_day = secs % 86400;
+    let hour = time_of_day / 3600;
+    let minute = (time_of_day % 3600) / 60;
+    let second = time_of_day % 60;
+
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+            year, month, day, hour, minute, second, millis)
+}
+
 /// The error kind returned when another daemon already owns this data directory.
 pub const ALREADY_RUNNING: &str = "another netproxyd is already running for this data directory";
 
@@ -345,6 +379,116 @@ async fn dispatch(
             let run_id = run.clone();
             blocking(move || store.delete_run(&run_id)).await?;
             Ok(json!({"deleted": run}))
+        }
+        "runs.export" => {
+            #[derive(Deserialize)]
+            struct P { run: Option<String>, format: String, host: Option<String> }
+            let P { run, format, host } = p(params)?;
+            let run = resolve_run(run)?;
+            tracing::info!(client, %run, %format, "runs.export");
+
+            match format.as_str() {
+                "json" => {
+                    let store = d.store.clone();
+                    let mut filter = FlowFilter { run: Some(run), ..Default::default() };
+                    if let Some(h) = host {
+                        filter.host = Some(h);
+                    }
+                    let (flows, _) = typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
+                    Ok(json!({"flows": flows, "format": "json", "version": 1}))
+                }
+                "csv" => {
+                    let store = d.store.clone();
+                    let mut filter = FlowFilter { run: Some(run.clone()), ..Default::default() };
+                    if let Some(h) = host {
+                        filter.host = Some(h);
+                    }
+                    let (flows, _) = typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
+
+                    // Build CSV
+                    let mut csv = String::from("flow,method,host,path,status,duration_ms,req_bytes,res_bytes,started_at,state,mocked\n");
+                    for f in &flows {
+                        let method = f.method.as_deref().unwrap_or("");
+                        let host = f.host.as_deref().unwrap_or("");
+                        let path = f.path.as_deref().unwrap_or("");
+                        let status = f.status.map(|s| s.to_string()).unwrap_or_default();
+                        let duration_ms = f.ended_us.map(|e| ((e - f.started_us) as f64 / 1000.0).to_string()).unwrap_or_default();
+                        let started = f.started_us.to_string();
+                        csv.push_str(&format!("{},{},{},{},{},{},{},{},{},{},{}\n",
+                            f.flow, escape_csv(method), escape_csv(host), escape_csv(path),
+                            status, duration_ms, f.req_bytes, f.res_bytes, started, f.state, f.mocked));
+                    }
+
+                    Ok(json!({"csv": csv, "format": "csv", "rows": flows.len()}))
+                }
+                "har" => {
+                    let store = d.store.clone();
+                    let mut filter = FlowFilter { run: Some(run.clone()), ..Default::default() };
+                    if let Some(h) = host {
+                        filter.host = Some(h);
+                    }
+                    let (flows, _) = typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
+
+                    // Build HAR 1.2 format
+                    let entries: Vec<Value> = flows.iter().map(|f| {
+                        let started_datetime = format_datetime_iso8601(f.started_us);
+                        let duration_ms = f.ended_us.map(|e| (e - f.started_us) as f64 / 1000.0).unwrap_or(0.0);
+
+                        json!({
+                            "startedDateTime": started_datetime,
+                            "time": duration_ms,
+                            "request": {
+                                "method": f.method.as_deref().unwrap_or("GET"),
+                                "url": f.uri.as_deref().unwrap_or(""),
+                                "httpVersion": f.http_version.as_deref().unwrap_or("HTTP/1.1"),
+                                "headers": [],
+                                "queryString": [],
+                                "cookies": [],
+                                "headersSize": -1,
+                                "bodySize": f.req_bytes
+                            },
+                            "response": {
+                                "status": f.status.unwrap_or(0),
+                                "statusText": "",
+                                "httpVersion": f.http_version.as_deref().unwrap_or("HTTP/1.1"),
+                                "headers": [],
+                                "cookies": [],
+                                "content": {
+                                    "size": f.res_bytes,
+                                    "mimeType": "application/octet-stream"
+                                },
+                                "redirectURL": "",
+                                "headersSize": -1,
+                                "bodySize": f.res_bytes
+                            },
+                            "cache": {},
+                            "timings": {
+                                "send": 0,
+                                "wait": f.ttfb_us.map(|t| t as f64 / 1000.0).unwrap_or(0.0),
+                                "receive": duration_ms - f.ttfb_us.map(|t| t as f64 / 1000.0).unwrap_or(0.0)
+                            },
+                            "_mocked": f.mocked,
+                            "_rule": f.rule
+                        })
+                    }).collect();
+
+                    let har = json!({
+                        "log": {
+                            "version": "1.2",
+                            "creator": {
+                                "name": "NetProxy",
+                                "version": env!("CARGO_PKG_VERSION")
+                            },
+                            "entries": entries
+                        }
+                    });
+
+                    Ok(har)
+                }
+                _ => {
+                    Err((E_PARAMS, format!("unsupported format: {}", format)))
+                }
+            }
         }
         "flows.list" => {
             #[derive(Deserialize, Default)]

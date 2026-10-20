@@ -212,7 +212,7 @@ struct Banners: View {
             if model.diagnostics.droppedEvents > 0 {
                 banner("\(model.diagnostics.droppedEvents) events were dropped because the engine was overloaded. The list may be incomplete.", "exclamationmark.triangle.fill", .orange)
             }
-            if let e = model.lastError {
+            if let e = model.lastError, !e.contains("already running") {
                 banner(e, "xmark.octagon.fill", .red)
             }
         }.padding(.top, 8).padding(.horizontal, 12)

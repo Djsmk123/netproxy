@@ -59,7 +59,7 @@ public final class CaptureModel {
     public private(set) var eventsSeen: UInt64 = 0
 
     public let supervisor: DaemonSupervisor?
-    private var client: ControlClient?
+    public private(set) var client: ControlClient?
     private var cursor: FlowCursor?
     private var subscription: Int?
     private var lastSeq: UInt64 = 0
@@ -375,6 +375,31 @@ public final class CaptureModel {
             }
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    /// Delete multiple sessions at once.
+    public func deleteSessions(_ runsToDelete: Set<String>) async {
+        guard !runsToDelete.isEmpty, let c = client else { return }
+
+        // Delete from backend first
+        for run in runsToDelete {
+            _ = try? await c.callVoid("runs.delete", ["run": run])
+        }
+
+        // Refresh runs list
+        await refreshRuns()
+
+        // Update selection if current run was deleted
+        if let run = selectedRun, runsToDelete.contains(run) {
+            flows = []
+            selection = nil
+            if let nextRun = runs.first?.run {
+                selectedRun = nextRun
+                await switchRun()
+            } else {
+                selectedRun = nil
+            }
         }
     }
 

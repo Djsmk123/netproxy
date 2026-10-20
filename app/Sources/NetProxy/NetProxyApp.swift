@@ -53,6 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct NetProxyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel.shared.capture
+    @State private var showAbout = false
+    @State private var showSettings = false
+    @State private var showDeviceSetup = false
+    @State private var showMockManager = false
+    @State private var showExport = false
 
     var body: some Scene {
         WindowGroup("NetProxy") {
@@ -69,10 +74,52 @@ struct NetProxyApp: App {
                     DemoHooks.scheduleSnapshot()
                     #endif
                 }
+                .sheet(isPresented: $showAbout) {
+                    AboutView()
+                }
+                .sheet(isPresented: $showSettings) {
+                    SettingsView()
+                }
+                .sheet(isPresented: $showDeviceSetup) {
+                    DeviceSetupView()
+                        .environment(model)
+                }
+                .sheet(isPresented: $showMockManager) {
+                    MockManagerView()
+                        .environment(model)
+                }
+                .sheet(isPresented: $showExport) {
+                    ExportView()
+                        .environment(model)
+                }
         }
         .defaultSize(width: 1280, height: 780)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About NetProxy") { showAbout = true }
+            }
             CommandGroup(replacing: .newItem) {}
+            CommandMenu("Edit") {
+                Button("Clear Filters") {
+                    model.filter = FilterState()
+                }
+                .keyboardShortcut("l", modifiers: [.command])
+                .disabled(!model.filter.isActive)
+            }
+            CommandMenu("View") {
+                Button("Reload") {
+                    Task {
+                        await model.refreshRuns()
+                        await model.reloadFlows()
+                    }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                Divider()
+                Button("Enter Full Screen") {
+                    NSApp.windows.first?.toggleFullScreen(nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .control])
+            }
             CommandMenu("Capture") {
                 Button(model.status?.isRunning == true ? "Stop Capture" : "Start Capture") {
                     Task { if model.status?.isRunning == true { await model.stopCapture() } else { await model.startCapture(allowDevices: model.listenAllInterfaces) } }
@@ -81,13 +128,45 @@ struct NetProxyApp: App {
                 Button("Clear List") { model.clearView() }.keyboardShortcut("k", modifiers: [.command])
             }
             CommandMenu("Tools") {
+                Button("Map Local...") {}
+                    .disabled(true)
+                Button("Map Remote...") {}
+                    .disabled(true)
+                Button("Mock Manager...") {
+                    showMockManager = true
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+                Divider()
                 Button("Toggle Breakpoints") { }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
-                    .disabled(true) // Handled by MainView
+                    .disabled(true)
                 Divider()
-                Button("Export...") { }
+                Button("Export...") { showExport = true }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
-                    .disabled(true) // Handled by MainView
+                Divider()
+                Button("Settings...") { showSettings = true }
+                    .keyboardShortcut(",", modifiers: [.command])
+            }
+            CommandGroup(replacing: .help) {
+                Button("NetProxy Help") {
+                    if let url = URL(string: "https://github.com/djsmk123/netproxy/wiki") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                Button("Device Setup Guide") {
+                    showDeviceSetup = true
+                }
+                Button("Keyboard Shortcuts") {
+                    if let url = URL(string: "https://github.com/djsmk123/netproxy/wiki/Shortcuts") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                Divider()
+                Button("Report Issue") {
+                    if let url = URL(string: "https://github.com/djsmk123/netproxy/issues/new") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
             }
         }
     }
