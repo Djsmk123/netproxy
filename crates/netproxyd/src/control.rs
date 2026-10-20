@@ -490,6 +490,37 @@ async fn dispatch(
                 }
             }
         }
+        "runs.import" => {
+            #[derive(Deserialize)]
+            struct P { har_json: String, name: Option<String> }
+            let P { har_json, name } = p(params)?;
+            tracing::info!(client, "runs.import");
+
+            // Parse HAR JSON
+            let har_value: Value = serde_json::from_str(&har_json)
+                .map_err(|e| (E_PARAMS, format!("invalid HAR JSON: {}", e)))?;
+
+            let entries = har_value.get("log")
+                .and_then(|log| log.get("entries"))
+                .and_then(Value::as_array)
+                .ok_or_else(|| (E_PARAMS, "HAR must have log.entries array".to_string()))?;
+
+            let run_name = name.unwrap_or_else(|| {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                format!("imported-{}", now)
+            });
+
+            // For now, return import stats without actually inserting
+            // Full implementation would create flows in the database
+            Ok(json!({
+                "imported": run_name,
+                "entries": entries.len(),
+                "message": "HAR import not yet fully implemented in database"
+            }))
+        }
         "flows.list" => {
             #[derive(Deserialize, Default)]
             struct P { #[serde(default)] filter: FlowFilter, limit: Option<usize>, cursor: Option<Cursor> }

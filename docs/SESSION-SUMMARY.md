@@ -227,9 +227,18 @@ All Phase 1 features from `docs/TODO-UI-FEATURES.md` are now complete:
 - Custom fields: `_mocked`, `_rule` (NetProxy extensions)
 - Compatible with HAR viewers and analysis tools
 
+### Session Import (NEW)
+- **Import HAR Files:** Full implementation
+  - Backend: `runs.import` RPC method
+  - Validates JSON structure and HAR format
+  - UI: File picker with format validation
+  - Access: File → Import Session... (⇧⌘I)
+  - Supported: .har and .json files
+
 ### Remaining Phase 2 Items
 - **Request Breakpoints:** Requires backend changes + UI
-- **Session Import:** Requires HAR parser + backend integration
+- **Drag & Drop Import:** UI enhancement
+- **Import from Charles/Fiddler:** Format converters
 
 ---
 

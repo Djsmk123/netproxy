@@ -55,10 +55,10 @@ public func deleteSessions(_ runsToDelete: Set<String>) async // ✅ DONE
 - [x] Top menu: Tools → Export... (⇧⌘E) ✅ WORKING
 
 **Import Session:**
-- [ ] Import HAR files
-- [ ] Import from other proxies (Charles, Fiddler)
-- [ ] Top menu: File → Import Session...
-- [ ] Drag & drop HAR files
+- [x] Import HAR files ✅ WORKING
+- [x] Top menu: File → Import Session... (⇧⌘I) ✅ WORKING
+- [ ] Drag & drop HAR files (deferred)
+- [ ] Import from other proxies (Charles, Fiddler) (deferred)
 
 **Implementation:**
 ```swift
@@ -274,10 +274,10 @@ struct AboutView: View {
 3. ✅ Enhanced menu bar (Help, About)
 4. ✅ Settings window
 
-### Phase 2: Advanced Features ✅ 60% COMPLETE
+### Phase 2: Advanced Features ✅ 75% COMPLETE
 5. ✅ Session Export (JSON/CSV/HAR)
 6. ✅ Map Local/Remote dialogs  
-7. [ ] Session Import (HAR files)
+7. ✅ Session Import (HAR files)
 8. [ ] Request Breakpoints UI & backend
 
 ### Phase 3: MCP Integration

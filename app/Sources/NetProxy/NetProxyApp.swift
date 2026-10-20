@@ -58,6 +58,7 @@ struct NetProxyApp: App {
     @State private var showDeviceSetup = false
     @State private var showMockManager = false
     @State private var showExport = false
+    @State private var showImport = false
 
     var body: some Scene {
         WindowGroup("NetProxy") {
@@ -92,6 +93,10 @@ struct NetProxyApp: App {
                     ExportView()
                         .environment(model)
                 }
+                .sheet(isPresented: $showImport) {
+                    ImportView()
+                        .environment(model)
+                }
         }
         .defaultSize(width: 1280, height: 780)
         .commands {
@@ -99,6 +104,10 @@ struct NetProxyApp: App {
                 Button("About NetProxy") { showAbout = true }
             }
             CommandGroup(replacing: .newItem) {}
+            CommandMenu("File") {
+                Button("Import Session...") { showImport = true }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+            }
             CommandMenu("Edit") {
                 Button("Clear Filters") {
                     model.filter = FilterState()
