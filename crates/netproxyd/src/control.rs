@@ -30,7 +30,10 @@ use tokio::{
     sync::mpsc,
     task::JoinHandle,
 };
-use tokio_util::{codec::{Framed, LinesCodec}, sync::CancellationToken};
+use tokio_util::{
+    codec::{Framed, LinesCodec},
+    sync::CancellationToken,
+};
 
 /// sockaddr_un.sun_path is 104 bytes on macOS (108 on Linux), including the NUL.
 const MAX_SOCKET_PATH: usize = 100;
@@ -73,7 +76,13 @@ fn ensure_private_dir(dir: &Path) -> io::Result<()> {
     let md = std::fs::metadata(dir)?;
     use std::os::unix::fs::MetadataExt;
     if md.uid() != euid() || md.mode() & 0o077 != 0 {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, format!("{} must be owned by the current user with mode 0700", dir.display())));
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "{} must be owned by the current user with mode 0700",
+                dir.display()
+            ),
+        ));
     }
     Ok(())
 }
@@ -85,7 +94,11 @@ fn random_token() -> String {
 }
 
 fn ct_eq(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
 }
 
 fn escape_csv(s: &str) -> String {
@@ -97,7 +110,7 @@ fn escape_csv(s: &str) -> String {
 }
 
 fn format_datetime_iso8601(us: i64) -> String {
-    use std::time::{UNIX_EPOCH, Duration};
+    use std::time::{Duration, UNIX_EPOCH};
     let secs = (us / 1_000_000) as u64;
     let nanos = ((us % 1_000_000) * 1000) as u32;
     let datetime = UNIX_EPOCH + Duration::new(secs, nanos);
@@ -118,8 +131,10 @@ fn format_datetime_iso8601(us: i64) -> String {
     let minute = (time_of_day % 3600) / 60;
     let second = time_of_day % 60;
 
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
-            year, month, day, hour, minute, second, millis)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        year, month, day, hour, minute, second, millis
+    )
 }
 
 /// The error kind returned when another daemon already owns this data directory.
@@ -128,8 +143,19 @@ pub const ALREADY_RUNNING: &str = "another netproxyd is already running for this
 pub async fn serve(daemon: Arc<Daemon>, run_dir: &Path) -> io::Result<ControlServer> {
     ensure_private_dir(run_dir)?;
     // Single-instance guard: never clobber a live daemon's socket/token.
-    let lock = std::fs::OpenOptions::new().write(true).create(true).truncate(false).mode(0o600).open(run_dir.join("daemon.lock"))?;
-    if unsafe { libc::flock(std::os::fd::AsRawFd::as_raw_fd(&lock), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+    let lock = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(run_dir.join("daemon.lock"))?;
+    if unsafe {
+        libc::flock(
+            std::os::fd::AsRawFd::as_raw_fd(&lock),
+            libc::LOCK_EX | libc::LOCK_NB,
+        )
+    } != 0
+    {
         return Err(io::Error::new(io::ErrorKind::AddrInUse, ALREADY_RUNNING));
     }
     // macOS limits sockaddr_un paths to ~104 bytes. If `<data>/run/control.sock` does not fit, bind a
@@ -157,7 +183,11 @@ pub async fn serve(daemon: Arc<Daemon>, run_dir: &Path) -> io::Result<ControlSer
     let _ = std::fs::remove_file(&token_file);
     {
         use std::io::Write;
-        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&token_file)?;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&token_file)?;
         f.write_all(token.as_bytes())?;
     }
     let cancel = CancellationToken::new();
@@ -178,7 +208,17 @@ pub async fn serve(daemon: Arc<Daemon>, run_dir: &Path) -> io::Result<ControlSer
             }
         }
     });
-    Ok(ControlServer { info: ControlInfo { socket, endpoint_file, token_file, token }, cancel, task, _lock: lock })
+    Ok(ControlServer {
+        info: ControlInfo {
+            socket,
+            endpoint_file,
+            token_file,
+            token,
+        },
+        cancel,
+        task,
+        _lock: lock,
+    })
 }
 
 fn ok(id: &Value, result: Value) -> String {
@@ -204,7 +244,12 @@ struct Hello {
     client: Value,
 }
 
-async fn connection(daemon: Arc<Daemon>, stream: UnixStream, token: String, cancel: CancellationToken) -> io::Result<()> {
+async fn connection(
+    daemon: Arc<Daemon>,
+    stream: UnixStream,
+    token: String,
+    cancel: CancellationToken,
+) -> io::Result<()> {
     let framed = Framed::new(stream, LinesCodec::new_with_max_length(MAX_LINE));
     let (mut sink, mut lines) = framed.split();
 
@@ -215,19 +260,40 @@ async fn connection(daemon: Arc<Daemon>, stream: UnixStream, token: String, canc
     };
     let req: Value = serde_json::from_str(&first).unwrap_or(Value::Null);
     let id = req.get("id").cloned().unwrap_or(Value::Null);
-    let hello: Option<Hello> = (req.get("method") == Some(&json!("hello"))).then(|| serde_json::from_value(req["params"].clone()).ok()).flatten();
+    let hello: Option<Hello> = (req.get("method") == Some(&json!("hello")))
+        .then(|| serde_json::from_value(req["params"].clone()).ok())
+        .flatten();
     let Some(h) = hello.filter(|h| ct_eq(&h.token, &token)) else {
         return Ok(());
     };
     if h.api_version != API_VERSION {
-        let _ = sink.send(err(&id, E_VERSION, format!("unsupported api_version {}; server speaks {API_VERSION}", h.api_version))).await;
+        let _ = sink
+            .send(err(
+                &id,
+                E_VERSION,
+                format!(
+                    "unsupported api_version {}; server speaks {API_VERSION}",
+                    h.api_version
+                ),
+            ))
+            .await;
         return Ok(());
     }
-    let client_name = h.client.get("name").and_then(Value::as_str).unwrap_or("unknown").to_owned();
-    sink.send(ok(&id, json!({
-        "api_version": API_VERSION, "schema_version": SCHEMA_VERSION,
-        "daemon_version": env!("CARGO_PKG_VERSION"), "status": daemon.status(),
-    }))).await.map_err(io::Error::other)?;
+    let client_name = h
+        .client
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_owned();
+    sink.send(ok(
+        &id,
+        json!({
+            "api_version": API_VERSION, "schema_version": SCHEMA_VERSION,
+            "daemon_version": env!("CARGO_PKG_VERSION"), "status": daemon.status(),
+        }),
+    ))
+    .await
+    .map_err(io::Error::other)?;
 
     // --- single writer task; everything else sends lines through a bounded channel (backpressure).
     let (out_tx, mut out_rx) = mpsc::channel::<String>(256);
@@ -250,7 +316,10 @@ async fn connection(daemon: Arc<Daemon>, stream: UnixStream, token: String, canc
         };
         let req: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
-            Err(e) => { let _ = out_tx.send(err(&Value::Null, E_PARSE, e.to_string())).await; continue; }
+            Err(e) => {
+                let _ = out_tx.send(err(&Value::Null, E_PARSE, e.to_string())).await;
+                continue;
+            }
         };
         let id = req.get("id").cloned().unwrap_or(Value::Null);
         let Some(method) = req.get("method").and_then(Value::as_str) else {
@@ -258,7 +327,17 @@ async fn connection(daemon: Arc<Daemon>, stream: UnixStream, token: String, canc
             continue;
         };
         let params = req.get("params").cloned().unwrap_or(Value::Null);
-        let reply = dispatch(&daemon, &client_name, method, params, &out_tx, &cancel, &mut subs, &mut next_sub).await;
+        let reply = dispatch(
+            &daemon,
+            &client_name,
+            method,
+            params,
+            &out_tx,
+            &cancel,
+            &mut subs,
+            &mut next_sub,
+        )
+        .await;
         let line = match reply {
             Ok(v) => ok(&id, v),
             Err((code, msg)) => err(&id, code, msg),
@@ -296,7 +375,9 @@ async fn dispatch(
 ) -> Reply {
     let resolve_run = |run: Option<String>| -> Result<String, (i32, String)> {
         match run.as_deref() {
-            None | Some("current") => d.current_or_latest_run().ok_or_else(|| app("no capture runs yet")),
+            None | Some("current") => d
+                .current_or_latest_run()
+                .ok_or_else(|| app("no capture runs yet")),
             Some(r) => Ok(r.to_owned()),
         }
     };
@@ -305,48 +386,96 @@ async fn dispatch(
         "engine.status" => Ok(json!(d.status())),
         "engine.start" => {
             #[derive(Deserialize, Default)]
-            struct P { listen: Option<std::net::SocketAddr> }
-            let P { listen } = if params.is_null() { P::default() } else { p(params)? };
+            struct P {
+                listen: Option<std::net::SocketAddr>,
+            }
+            let P { listen } = if params.is_null() {
+                P::default()
+            } else {
+                p(params)?
+            };
             tracing::info!(client, "engine.start");
             d.start(listen).await.map(|s| json!(s)).map_err(app)
         }
         "engine.stop" => {
             tracing::info!(client, "engine.stop");
-            d.stop().await.map(|s| json!(s)).map_err(|e| match e { DaemonError::NotRunning => app("engine is not running"), o => app(o) })
+            d.stop().await.map(|s| json!(s)).map_err(|e| match e {
+                DaemonError::NotRunning => app("engine is not running"),
+                o => app(o),
+            })
         }
         "bodies.get" => {
             #[derive(Deserialize)]
-            struct P { run: Option<String>, flow: u64, dir: np_model::BodyDir, offset: Option<u64>, length: Option<usize> }
-            let P { run, flow, dir, offset, length } = p(params)?;
+            struct P {
+                run: Option<String>,
+                flow: u64,
+                dir: np_model::BodyDir,
+                offset: Option<u64>,
+                length: Option<usize>,
+            }
+            let P {
+                run,
+                flow,
+                dir,
+                offset,
+                length,
+            } = p(params)?;
             let run = resolve_run(run)?;
             let run_again = run.clone();
-            let (root, off, len) = (d.bodies_dir(), offset.unwrap_or(0), length.unwrap_or(256 * 1024).clamp(1, 1 << 20));
-            match tokio::task::spawn_blocking(move || crate::bodies::read_range(&root, &run, flow, dir, off, len)).await {
+            let (root, off, len) = (
+                d.bodies_dir(),
+                offset.unwrap_or(0),
+                length.unwrap_or(256 * 1024).clamp(1, 1 << 20),
+            );
+            match tokio::task::spawn_blocking(move || {
+                crate::bodies::read_range(&root, &run, flow, dir, off, len)
+            })
+            .await
+            {
                 Ok(Ok(Some((bytes, size)))) => {
                     use base64::Engine as _;
-                    Ok(json!({"data_b64": base64::engine::general_purpose::STANDARD.encode(&bytes), "offset": off, "size": size,
-                              "eof": off + bytes.len() as u64 >= size, "evicted": false}))
+                    Ok(
+                        json!({"data_b64": base64::engine::general_purpose::STANDARD.encode(&bytes), "offset": off, "size": size,
+                              "eof": off + bytes.len() as u64 >= size, "evicted": false}),
+                    )
                 }
                 Ok(Ok(None)) => {
                     // No file: either a small body held inline in its BodyEnd preview, or evicted.
                     let store = d.store.clone();
                     let (run2, dir2) = (run_again, dir);
                     let inline = typed(move || {
-                        Ok(store.reader()?.flow_events(&run2, flow)?.into_iter().find_map(|e| match e.event {
-                            np_model::Event::BodyEnd { dir: bd, total, preview_b64, stored_bytes, .. } if bd == dir2 && stored_bytes == total => Some(preview_b64),
-                            _ => None,
-                        }))
-                    }).await?;
+                        Ok(store
+                            .reader()?
+                            .flow_events(&run2, flow)?
+                            .into_iter()
+                            .find_map(|e| match e.event {
+                                np_model::Event::BodyEnd {
+                                    dir: bd,
+                                    total,
+                                    preview_b64,
+                                    stored_bytes,
+                                    ..
+                                } if bd == dir2 && stored_bytes == total => Some(preview_b64),
+                                _ => None,
+                            }))
+                    })
+                    .await?;
                     match inline {
                         Some(b64) => {
                             use base64::Engine as _;
-                            let all = base64::engine::general_purpose::STANDARD.decode(&b64).unwrap_or_default();
+                            let all = base64::engine::general_purpose::STANDARD
+                                .decode(&b64)
+                                .unwrap_or_default();
                             let start = (off as usize).min(all.len());
                             let end = (start + len).min(all.len());
-                            Ok(json!({"data_b64": base64::engine::general_purpose::STANDARD.encode(&all[start..end]), "offset": off,
-                                      "size": all.len(), "eof": end >= all.len(), "evicted": false, "inline": true}))
+                            Ok(
+                                json!({"data_b64": base64::engine::general_purpose::STANDARD.encode(&all[start..end]), "offset": off,
+                                      "size": all.len(), "eof": end >= all.len(), "evicted": false, "inline": true}),
+                            )
                         }
-                        None => Ok(json!({"data_b64": "", "offset": off, "size": 0, "eof": true, "evicted": true})),
+                        None => Ok(
+                            json!({"data_b64": "", "offset": off, "size": 0, "eof": true, "evicted": true}),
+                        ),
                     }
                 }
                 Ok(Err(e)) => Err(app(e)),
@@ -360,7 +489,9 @@ async fn dispatch(
         }
         "storage.prune" => {
             #[derive(Deserialize)]
-            struct P { max_bytes: u64 }
+            struct P {
+                max_bytes: u64,
+            }
             let P { max_bytes } = p(params)?;
             tracing::info!(client, max_bytes, "storage.prune");
             d.prune_now(max_bytes).await.map(|r| json!(r)).map_err(app)
@@ -372,7 +503,9 @@ async fn dispatch(
         }
         "runs.delete" => {
             #[derive(Deserialize)]
-            struct P { run: String }
+            struct P {
+                run: String,
+            }
             let P { run } = p(params)?;
             tracing::info!(client, %run, "runs.delete");
             let store = d.store.clone();
@@ -382,7 +515,11 @@ async fn dispatch(
         }
         "runs.export" => {
             #[derive(Deserialize)]
-            struct P { run: Option<String>, format: String, host: Option<String> }
+            struct P {
+                run: Option<String>,
+                format: String,
+                host: Option<String>,
+            }
             let P { run, format, host } = p(params)?;
             let run = resolve_run(run)?;
             tracing::info!(client, %run, %format, "runs.export");
@@ -390,20 +527,28 @@ async fn dispatch(
             match format.as_str() {
                 "json" => {
                     let store = d.store.clone();
-                    let mut filter = FlowFilter { run: Some(run), ..Default::default() };
+                    let mut filter = FlowFilter {
+                        run: Some(run),
+                        ..Default::default()
+                    };
                     if let Some(h) = host {
                         filter.host = Some(h);
                     }
-                    let (flows, _) = typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
+                    let (flows, _) =
+                        typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
                     Ok(json!({"flows": flows, "format": "json", "version": 1}))
                 }
                 "csv" => {
                     let store = d.store.clone();
-                    let mut filter = FlowFilter { run: Some(run.clone()), ..Default::default() };
+                    let mut filter = FlowFilter {
+                        run: Some(run.clone()),
+                        ..Default::default()
+                    };
                     if let Some(h) = host {
                         filter.host = Some(h);
                     }
-                    let (flows, _) = typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
+                    let (flows, _) =
+                        typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
 
                     // Build CSV
                     let mut csv = String::from("flow,method,host,path,status,duration_ms,req_bytes,res_bytes,started_at,state,mocked\n");
@@ -412,22 +557,40 @@ async fn dispatch(
                         let host = f.host.as_deref().unwrap_or("");
                         let path = f.path.as_deref().unwrap_or("");
                         let status = f.status.map(|s| s.to_string()).unwrap_or_default();
-                        let duration_ms = f.ended_us.map(|e| ((e - f.started_us) as f64 / 1000.0).to_string()).unwrap_or_default();
+                        let duration_ms = f
+                            .ended_us
+                            .map(|e| ((e - f.started_us) as f64 / 1000.0).to_string())
+                            .unwrap_or_default();
                         let started = f.started_us.to_string();
-                        csv.push_str(&format!("{},{},{},{},{},{},{},{},{},{},{}\n",
-                            f.flow, escape_csv(method), escape_csv(host), escape_csv(path),
-                            status, duration_ms, f.req_bytes, f.res_bytes, started, f.state, f.mocked));
+                        csv.push_str(&format!(
+                            "{},{},{},{},{},{},{},{},{},{},{}\n",
+                            f.flow,
+                            escape_csv(method),
+                            escape_csv(host),
+                            escape_csv(path),
+                            status,
+                            duration_ms,
+                            f.req_bytes,
+                            f.res_bytes,
+                            started,
+                            f.state,
+                            f.mocked
+                        ));
                     }
 
                     Ok(json!({"csv": csv, "format": "csv", "rows": flows.len()}))
                 }
                 "har" => {
                     let store = d.store.clone();
-                    let mut filter = FlowFilter { run: Some(run.clone()), ..Default::default() };
+                    let mut filter = FlowFilter {
+                        run: Some(run.clone()),
+                        ..Default::default()
+                    };
                     if let Some(h) = host {
                         filter.host = Some(h);
                     }
-                    let (flows, _) = typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
+                    let (flows, _) =
+                        typed(move || store.reader()?.list_flows(&filter, 10000, None)).await?;
 
                     // Build HAR 1.2 format
                     let entries: Vec<Value> = flows.iter().map(|f| {
@@ -485,14 +648,15 @@ async fn dispatch(
 
                     Ok(har)
                 }
-                _ => {
-                    Err((E_PARAMS, format!("unsupported format: {}", format)))
-                }
+                _ => Err((E_PARAMS, format!("unsupported format: {}", format))),
             }
         }
         "runs.import" => {
             #[derive(Deserialize)]
-            struct P { har_json: String, name: Option<String> }
+            struct P {
+                har_json: String,
+                name: Option<String>,
+            }
             let P { har_json, name } = p(params)?;
             tracing::info!(client, "runs.import");
 
@@ -500,7 +664,8 @@ async fn dispatch(
             let har_value: Value = serde_json::from_str(&har_json)
                 .map_err(|e| (E_PARAMS, format!("invalid HAR JSON: {}", e)))?;
 
-            let entries = har_value.get("log")
+            let entries = har_value
+                .get("log")
                 .and_then(|log| log.get("entries"))
                 .and_then(Value::as_array)
                 .ok_or_else(|| (E_PARAMS, "HAR must have log.entries array".to_string()))?;
@@ -523,11 +688,16 @@ async fn dispatch(
         }
         "breakpoints.add" => {
             #[derive(Deserialize)]
-            struct P { pattern: String, enabled: Option<bool> }
+            struct P {
+                pattern: String,
+                enabled: Option<bool>,
+            }
             let P { pattern, enabled } = p(params)?;
             tracing::info!(client, %pattern, "breakpoints.add");
             // TODO: Store breakpoints in daemon state
-            Ok(json!({"id": format!("bp-{}", pattern.replace("/", "-")), "pattern": pattern, "enabled": enabled.unwrap_or(true)}))
+            Ok(
+                json!({"id": format!("bp-{}", pattern.replace("/", "-")), "pattern": pattern, "enabled": enabled.unwrap_or(true)}),
+            )
         }
         "breakpoints.list" => {
             tracing::info!(client, "breakpoints.list");
@@ -536,7 +706,9 @@ async fn dispatch(
         }
         "breakpoints.remove" => {
             #[derive(Deserialize)]
-            struct P { id: String }
+            struct P {
+                id: String,
+            }
             let P { id } = p(params)?;
             tracing::info!(client, %id, "breakpoints.remove");
             // TODO: Remove from daemon state
@@ -544,7 +716,10 @@ async fn dispatch(
         }
         "breakpoints.toggle" => {
             #[derive(Deserialize)]
-            struct P { id: String, enabled: bool }
+            struct P {
+                id: String,
+                enabled: bool,
+            }
             let P { id, enabled } = p(params)?;
             tracing::info!(client, %id, %enabled, "breakpoints.toggle");
             // TODO: Update daemon state
@@ -552,40 +727,76 @@ async fn dispatch(
         }
         "flows.list" => {
             #[derive(Deserialize, Default)]
-            struct P { #[serde(default)] filter: FlowFilter, limit: Option<usize>, cursor: Option<Cursor> }
-            let P { mut filter, limit, cursor } = if params.is_null() { P::default() } else { p(params)? };
+            struct P {
+                #[serde(default)]
+                filter: FlowFilter,
+                limit: Option<usize>,
+                cursor: Option<Cursor>,
+            }
+            let P {
+                mut filter,
+                limit,
+                cursor,
+            } = if params.is_null() {
+                P::default()
+            } else {
+                p(params)?
+            };
             if filter.run.as_deref() == Some("current") {
                 filter.run = Some(resolve_run(None)?);
             }
             let limit = limit.unwrap_or(100).clamp(1, 500);
             let store = d.store.clone();
-            let (rows, next) = typed(move || store.reader()?.list_flows(&filter, limit, cursor)).await?;
+            let (rows, next) =
+                typed(move || store.reader()?.list_flows(&filter, limit, cursor)).await?;
             Ok(json!({"flows": rows, "next": next}))
         }
         "flows.get_many" => {
             #[derive(Deserialize)]
-            struct P { run: Option<String>, flows: Vec<u64> }
+            struct P {
+                run: Option<String>,
+                flows: Vec<u64>,
+            }
             let P { run, flows } = p(params)?;
             if flows.len() > 500 {
                 return Err((E_PARAMS, "at most 500 flows per call".into()));
             }
             let run = resolve_run(run)?;
             let store = d.store.clone();
-            blocking(move || store.reader()?.get_flows(&run, &flows)).await.map(|rows| json!({"flows": rows}))
+            blocking(move || store.reader()?.get_flows(&run, &flows))
+                .await
+                .map(|rows| json!({"flows": rows}))
         }
         "flows.get" => {
             #[derive(Deserialize)]
-            struct P { run: Option<String>, flow: u64 }
+            struct P {
+                run: Option<String>,
+                flow: u64,
+            }
             let P { run, flow } = p(params)?;
             let run = resolve_run(run)?;
             let store = d.store.clone();
-            let (row, events) = typed(move || { let r = store.reader()?; Ok((r.get_flow(&run, flow)?, r.flow_events(&run, flow)?)) }).await?;
+            let (row, events) = typed(move || {
+                let r = store.reader()?;
+                Ok((r.get_flow(&run, flow)?, r.flow_events(&run, flow)?))
+            })
+            .await?;
             Ok(json!({"flow": row, "events": events}))
         }
         "events.diagnostics" => {
             #[derive(Deserialize)]
-            struct P { run: Option<String>, limit: Option<usize> }
-            let P { run, limit } = if params.is_null() { P { run: None, limit: None } } else { p(params)? };
+            struct P {
+                run: Option<String>,
+                limit: Option<usize>,
+            }
+            let P { run, limit } = if params.is_null() {
+                P {
+                    run: None,
+                    limit: None,
+                }
+            } else {
+                p(params)?
+            };
             let run = resolve_run(run)?;
             let limit = limit.unwrap_or(2000).clamp(1, 5000);
             let store = d.store.clone();
@@ -596,7 +807,11 @@ async fn dispatch(
         }
         "events.since" => {
             #[derive(Deserialize)]
-            struct P { run: Option<String>, seq: u64, limit: Option<usize> }
+            struct P {
+                run: Option<String>,
+                seq: u64,
+                limit: Option<usize>,
+            }
             let P { run, seq, limit } = p(params)?;
             let run = resolve_run(run)?;
             let limit = limit.unwrap_or(500).clamp(1, 1000);
@@ -606,8 +821,15 @@ async fn dispatch(
         }
         "events.subscribe" => {
             #[derive(Deserialize, Default)]
-            struct P { run: Option<String>, since: Option<u64> }
-            let P { run, since } = if params.is_null() { P::default() } else { p(params)? };
+            struct P {
+                run: Option<String>,
+                since: Option<u64>,
+            }
+            let P { run, since } = if params.is_null() {
+                P::default()
+            } else {
+                p(params)?
+            };
             let run = resolve_run(run)?;
             let store = d.store.clone();
             let r2 = run.clone();
@@ -624,44 +846,63 @@ async fn dispatch(
         }
         "events.unsubscribe" => {
             #[derive(Deserialize)]
-            struct P { subscription: u64 }
+            struct P {
+                subscription: u64,
+            }
             let P { subscription } = p(params)?;
             let found = subs.remove(&subscription).map(|t| t.cancel()).is_some();
             Ok(json!({"unsubscribed": found}))
         }
         "mocks.list" => {
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
             let rules = registry.list_rules();
             Ok(json!({"rules": rules}))
         }
         "mocks.list_dynamic" => {
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
             let rules = registry.list_dynamic_rules();
             Ok(json!({"rules": rules}))
         }
         "mocks.list_static" => {
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
             let rules = registry.list_static_rules();
             Ok(json!({"rules": rules}))
         }
         "mocks.get" => {
             #[derive(Deserialize)]
-            struct P { id: String }
+            struct P {
+                id: String,
+            }
             let P { id } = p(params)?;
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
-            let rule = registry.get_rule(&id).ok_or_else(|| app(format!("rule not found: {}", id)))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
+            let rule = registry
+                .get_rule(&id)
+                .ok_or_else(|| app(format!("rule not found: {}", id)))?;
             Ok(json!({"rule": rule}))
         }
         "mocks.add" => {
             #[derive(Deserialize)]
-            struct P { rule: np_mock::Rule }
+            struct P {
+                rule: np_mock::Rule,
+            }
             let P { rule } = p(params)?;
             tracing::info!(client, rule_id = %rule.id, "mocks.add");
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
 
             // Validate before adding
             let issues = registry.validate_rule(&rule);
-            let errors: Vec<_> = issues.iter()
+            let errors: Vec<_> = issues
+                .iter()
                 .filter(|i| matches!(i.severity, np_mock::Severity::Error))
                 .collect();
 
@@ -674,14 +915,19 @@ async fn dispatch(
         }
         "mocks.update" => {
             #[derive(Deserialize)]
-            struct P { rule: np_mock::Rule }
+            struct P {
+                rule: np_mock::Rule,
+            }
             let P { rule } = p(params)?;
             tracing::info!(client, rule_id = %rule.id, "mocks.update");
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
 
             // Validate before updating
             let issues = registry.validate_rule(&rule);
-            let errors: Vec<_> = issues.iter()
+            let errors: Vec<_> = issues
+                .iter()
                 .filter(|i| matches!(i.severity, np_mock::Severity::Error))
                 .collect();
 
@@ -694,22 +940,30 @@ async fn dispatch(
         }
         "mocks.remove" => {
             #[derive(Deserialize)]
-            struct P { id: String }
+            struct P {
+                id: String,
+            }
             let P { id } = p(params)?;
             tracing::info!(client, rule_id = %id, "mocks.remove");
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
             let removed = registry.remove_rule(&id).map_err(app)?;
             Ok(json!({"removed": removed}))
         }
         "mocks.clear_dynamic" => {
             tracing::info!(client, "mocks.clear_dynamic");
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
             registry.clear_dynamic_rules();
             Ok(json!({"success": true}))
         }
         "mocks.reload" => {
             tracing::info!(client, "mocks.reload");
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
             registry.reload().map_err(app)?;
 
             // Return validation issues
@@ -717,7 +971,9 @@ async fn dispatch(
             Ok(json!({"success": true, "issues": issues}))
         }
         "mocks.validate" => {
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
             let issues = registry.validate_all();
             Ok(json!({"issues": issues}))
         }
@@ -772,7 +1028,8 @@ async fn dispatch(
             tracing::info!(client, run = %run, flow, "mocks.from_flow");
 
             // Get fixtures directory
-            let fixtures_dir = d.mock_config_path()
+            let fixtures_dir = d
+                .mock_config_path()
                 .and_then(|p| p.parent())
                 .map(|p| p.join("fixtures"))
                 .unwrap_or_else(|| d.data_dir().join("fixtures"));
@@ -803,7 +1060,7 @@ async fn dispatch(
                 crate::flow_converter::convert_flow(&reader, &run, flow, &options)
             })
             .await
-            .map_err(|e| app(e))?
+            .map_err(app)?
             .map_err(app)?;
 
             // Write fixtures if requested
@@ -813,8 +1070,9 @@ async fn dispatch(
 
                 for fixture in &result.fixtures {
                     let path = fixtures_dir.join(&fixture.path);
-                    std::fs::write(&path, &fixture.content)
-                        .map_err(|e| app(format!("failed to write fixture {}: {}", fixture.path, e)))?;
+                    std::fs::write(&path, &fixture.content).map_err(|e| {
+                        app(format!("failed to write fixture {}: {}", fixture.path, e))
+                    })?;
                 }
             }
 
@@ -872,7 +1130,8 @@ async fn dispatch(
             tracing::info!(client, run = %run_resolved, flow, "mocks.from_flow_and_add");
 
             // Get fixtures directory
-            let fixtures_dir = d.mock_config_path()
+            let fixtures_dir = d
+                .mock_config_path()
                 .and_then(|p| p.parent())
                 .map(|p| p.join("fixtures"))
                 .unwrap_or_else(|| d.data_dir().join("fixtures"));
@@ -903,7 +1162,7 @@ async fn dispatch(
                 crate::flow_converter::convert_flow(&reader, &run_resolved, flow, &options)
             })
             .await
-            .map_err(|e| app(e))?
+            .map_err(app)?
             .map_err(app)?;
 
             // Write fixtures
@@ -913,17 +1172,21 @@ async fn dispatch(
 
                 for fixture in &result.fixtures {
                     let path = fixtures_dir.join(&fixture.path);
-                    std::fs::write(&path, &fixture.content)
-                        .map_err(|e| app(format!("failed to write fixture {}: {}", fixture.path, e)))?;
+                    std::fs::write(&path, &fixture.content).map_err(|e| {
+                        app(format!("failed to write fixture {}: {}", fixture.path, e))
+                    })?;
                 }
             }
 
             // Add the rule to the registry
-            let registry = d.mock_registry().ok_or_else(|| app("mock registry not configured"))?;
+            let registry = d
+                .mock_registry()
+                .ok_or_else(|| app("mock registry not configured"))?;
 
             // Validate before adding
             let issues = registry.validate_rule(&result.rule);
-            let errors: Vec<_> = issues.iter()
+            let errors: Vec<_> = issues
+                .iter()
                 .filter(|i| matches!(i.severity, np_mock::Severity::Error))
                 .collect();
 
@@ -971,9 +1234,18 @@ where
 }
 
 /// Streams events with `seq > after` in order, forever, until cancelled or the client goes away.
-async fn follow(d: Arc<Daemon>, run: String, mut after: u64, sub: u64, out: mpsc::Sender<String>, cancel: CancellationToken) {
+async fn follow(
+    d: Arc<Daemon>,
+    run: String,
+    mut after: u64,
+    sub: u64,
+    out: mpsc::Sender<String>,
+    cancel: CancellationToken,
+) {
     let mut commits = d.commits();
-    let Ok(mut reader) = d.store.reader() else { return };
+    let Ok(mut reader) = d.store.reader() else {
+        return;
+    };
     loop {
         let r = run.clone();
         let (rd, chunk) = match tokio::task::spawn_blocking(move || {

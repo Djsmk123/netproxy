@@ -53,7 +53,10 @@ pub struct RuleValidator<'a> {
 
 impl<'a> RuleValidator<'a> {
     pub fn new(rules: &'a [Rule], fixtures_dir: &'a Path) -> Self {
-        Self { rules, fixtures_dir }
+        Self {
+            rules,
+            fixtures_dir,
+        }
     }
 
     /// Run all validation checks and return issues sorted by severity.
@@ -98,18 +101,20 @@ impl<'a> RuleValidator<'a> {
         let mut issues = Vec::new();
 
         for rule in self.rules {
-            if let Action::Respond { body, .. } = &rule.action {
-                if let BodySource::File { file } = body {
-                    let path = self.fixtures_dir.join(file);
-                    if !path.exists() {
-                        issues.push(ValidationIssue {
-                            severity: Severity::Error,
-                            kind: IssueKind::MissingFixture,
-                            rule_id: rule.id.clone(),
-                            message: format!("fixture not found: {} (expected at {})", file, path.display()),
-                            related_rule: None,
-                        });
-                    }
+            if let Action::Respond { body: BodySource::File { file }, .. } = &rule.action {
+                let path = self.fixtures_dir.join(file);
+                if !path.exists() {
+                    issues.push(ValidationIssue {
+                        severity: Severity::Error,
+                        kind: IssueKind::MissingFixture,
+                        rule_id: rule.id.clone(),
+                        message: format!(
+                            "fixture not found: {} (expected at {})",
+                            file,
+                            path.display()
+                        ),
+                        related_rule: None,
+                    });
                 }
             }
         }
@@ -144,7 +149,10 @@ impl<'a> RuleValidator<'a> {
                                 severity: Severity::Warning,
                                 kind: IssueKind::InvalidRegex,
                                 rule_id: rule.id.clone(),
-                                message: format!("header '{}' pattern '{}' looks like regex but is invalid: {}", key, value, e),
+                                message: format!(
+                                    "header '{}' pattern '{}' looks like regex but is invalid: {}",
+                                    key, value, e
+                                ),
                                 related_rule: None,
                             });
                         }
@@ -441,10 +449,7 @@ impl<'a> RuleValidator<'a> {
             // Same action type
             (Action::Pass, Action::Pass) => false,
             (Action::Fail { .. }, Action::Fail { .. }) => false,
-            (
-                Action::Respond { status: s1, .. },
-                Action::Respond { status: s2, .. },
-            ) => {
+            (Action::Respond { status: s1, .. }, Action::Respond { status: s2, .. }) => {
                 // Consider different if status codes differ
                 s1 != s2
             }
@@ -483,10 +488,7 @@ mod tests {
 
     #[test]
     fn detects_duplicate_ids() {
-        let rules = vec![
-            test_rule("dup", 100, true),
-            test_rule("dup", 200, true),
-        ];
+        let rules = vec![test_rule("dup", 100, true), test_rule("dup", 200, true)];
 
         let validator = RuleValidator::new(&rules, Path::new("/tmp"));
         let issues = validator.validate();

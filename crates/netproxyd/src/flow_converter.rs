@@ -1,8 +1,8 @@
 //! Convert captured HTTP flows into mock rules.
 
 use crate::pattern_detector::{PathAnalysis, PatternDetector, Specificity};
-use np_model::{BodyDir, Envelope, Event};
 use np_mock::{Action, BodySource, MatchSpec, Rule};
+use np_model::{BodyDir, Envelope, Event};
 use np_store::{FlowRow, Reader};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -138,9 +138,15 @@ pub fn convert_flow(
     })
 }
 
+type ExtractedData = (
+    HashMap<String, String>,
+    HashMap<String, String>,
+    Option<Vec<u8>>,
+);
+
 fn extract_from_events(
     events: &[Envelope],
-) -> (HashMap<String, String>, HashMap<String, String>, Option<Vec<u8>>) {
+) -> ExtractedData {
     let mut req_headers = HashMap::new();
     let mut resp_headers = HashMap::new();
     let mut resp_body_preview = None;

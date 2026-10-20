@@ -38,7 +38,8 @@ pub fn get_tools() -> Vec<Tool> {
         },
         Tool {
             name: "engine_status".to_string(),
-            description: "Get current engine status (running/stopped, flows count, etc.)".to_string(),
+            description: "Get current engine status (running/stopped, flows count, etc.)"
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
@@ -192,7 +193,8 @@ pub fn get_tools() -> Vec<Tool> {
         },
         Tool {
             name: "ios_simulator_proxy_set".to_string(),
-            description: "Configure proxy in iOS Simulator (provides manual instructions)".to_string(),
+            description: "Configure proxy in iOS Simulator (provides manual instructions)"
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "required": ["host", "port"],
@@ -214,7 +216,8 @@ pub fn get_tools() -> Vec<Tool> {
         },
         Tool {
             name: "ios_simulator_proxy_clear".to_string(),
-            description: "Remove proxy from iOS Simulator (provides manual instructions)".to_string(),
+            description: "Remove proxy from iOS Simulator (provides manual instructions)"
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
