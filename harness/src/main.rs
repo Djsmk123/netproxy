@@ -1,7 +1,11 @@
 //! Standalone upstream for manual runs. Usage: np-harness [--port 9443] [--ca-out upstream-ca.pem]
 fn args(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
-    a.iter().position(|x| x == k).and_then(|i| a.get(i + 1)).cloned().unwrap_or(d.into())
+    a.iter()
+        .position(|x| x == k)
+        .and_then(|i| a.get(i + 1))
+        .cloned()
+        .unwrap_or(d.into())
 }
 
 #[tokio::main]

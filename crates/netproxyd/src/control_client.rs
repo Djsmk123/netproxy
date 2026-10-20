@@ -22,9 +22,9 @@ impl ControlClient {
     /// This reads the token from the token file and sends the `hello` message.
     pub async fn connect(socket_path: &Path) -> anyhow::Result<Self> {
         // Read endpoint file if it exists (socket path may be redirected)
-        let socket_dir = socket_path.parent().ok_or_else(|| {
-            anyhow::anyhow!("socket path has no parent directory")
-        })?;
+        let socket_dir = socket_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("socket path has no parent directory"))?;
         let endpoint_file = socket_dir.join("control.endpoint");
         let actual_socket = if endpoint_file.exists() {
             let endpoint_data = tokio::fs::read_to_string(&endpoint_file).await?;
@@ -38,7 +38,10 @@ impl ControlClient {
 
         // Read token from token file
         let token_file = socket_dir.join("control.token");
-        let token = tokio::fs::read_to_string(&token_file).await?.trim().to_string();
+        let token = tokio::fs::read_to_string(&token_file)
+            .await?
+            .trim()
+            .to_string();
 
         let mut client = Self { stream, next_id: 0 };
 

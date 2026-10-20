@@ -4,7 +4,9 @@
 //! (and the device-setup/rotation flow) is an M2 task; the key is never part of any export.
 
 use crate::engine::EngineError;
-use hudsucker::rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose};
+use hudsucker::rcgen::{
+    BasicConstraints, CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose,
+};
 use std::{fs, io::Write, path::Path};
 
 #[derive(Clone)]
@@ -21,25 +23,37 @@ impl CaMaterial {
         p.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         p.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
         p.distinguished_name.push(DnType::CommonName, common_name);
-        p.distinguished_name.push(DnType::OrganizationName, "NetProxy");
+        p.distinguished_name
+            .push(DnType::OrganizationName, "NetProxy");
         let cert = p.self_signed(&key).map_err(e)?;
-        Ok(Self { cert_pem: cert.pem(), key_pem: key.serialize_pem() })
+        Ok(Self {
+            cert_pem: cert.pem(),
+            key_pem: key.serialize_pem(),
+        })
     }
 
     /// Loads the CA from `dir`, creating it on first use. `ca.pem` (public) always lives in `dir`;
     /// the private key lives where `storage` says.
-    pub fn load_or_create_with(dir: &Path, common_name: &str, storage: &KeyStorage) -> Result<Self, EngineError> {
+    pub fn load_or_create_with(
+        dir: &Path,
+        common_name: &str,
+        storage: &KeyStorage,
+    ) -> Result<Self, EngineError> {
         let (cp, kp) = (dir.join("ca.pem"), dir.join("ca.key"));
         let ca_err = |e: &dyn std::fmt::Display| EngineError::Ca(e.to_string());
         let read_cert = || fs::read_to_string(&cp).map_err(|e| ca_err(&e));
         let validate = |ca: Self| -> Result<Self, EngineError> {
-            KeyPair::from_pem(&ca.key_pem).map_err(|e| EngineError::Ca(format!("corrupt CA key: {e}")))?;
+            KeyPair::from_pem(&ca.key_pem)
+                .map_err(|e| EngineError::Ca(format!("corrupt CA key: {e}")))?;
             Ok(ca)
         };
         match storage {
             KeyStorage::File => {
                 if cp.exists() && kp.exists() {
-                    return validate(Self { cert_pem: read_cert()?, key_pem: fs::read_to_string(&kp).map_err(|e| ca_err(&e))? });
+                    return validate(Self {
+                        cert_pem: read_cert()?,
+                        key_pem: fs::read_to_string(&kp).map_err(|e| ca_err(&e))?,
+                    });
                 }
             }
             #[cfg(target_os = "macos")]
@@ -47,12 +61,18 @@ impl CaMaterial {
                 let account = dir.to_string_lossy().into_owned();
                 if cp.exists() {
                     if let Some(key) = keychain::get(service, &account)? {
-                        return validate(Self { cert_pem: read_cert()?, key_pem: key });
+                        return validate(Self {
+                            cert_pem: read_cert()?,
+                            key_pem: key,
+                        });
                     }
                     // Legacy: a plaintext key file from before Keychain storage. Move it, then delete it.
                     if kp.exists() {
                         let key_pem = fs::read_to_string(&kp).map_err(|e| ca_err(&e))?;
-                        let ca = validate(Self { cert_pem: read_cert()?, key_pem })?;
+                        let ca = validate(Self {
+                            cert_pem: read_cert()?,
+                            key_pem,
+                        })?;
                         keychain::set(service, &account, &ca.key_pem)?;
                         fs::remove_file(&kp).map_err(|e| ca_err(&e))?;
                         return Ok(ca);
@@ -60,7 +80,11 @@ impl CaMaterial {
                 }
             }
             #[cfg(not(target_os = "macos"))]
-            KeyStorage::Keychain { .. } => return Err(EngineError::Ca("Keychain storage is only available on macOS".into())),
+            KeyStorage::Keychain { .. } => {
+                return Err(EngineError::Ca(
+                    "Keychain storage is only available on macOS".into(),
+                ))
+            }
         }
         fs::create_dir_all(dir).map_err(|e| ca_err(&e))?;
         let ca = Self::generate(common_name)?;
@@ -70,7 +94,9 @@ impl CaMaterial {
                 write_private(&kp, ca.key_pem.as_bytes()).map_err(|e| ca_err(&e))?;
             }
             #[cfg(target_os = "macos")]
-            KeyStorage::Keychain { service } => keychain::set(service, &dir.to_string_lossy(), &ca.key_pem)?,
+            KeyStorage::Keychain { service } => {
+                keychain::set(service, &dir.to_string_lossy(), &ca.key_pem)?
+            }
             #[cfg(not(target_os = "macos"))]
             KeyStorage::Keychain { .. } => unreachable!(),
         }
@@ -85,7 +111,9 @@ impl CaMaterial {
     /// Certificate as DER (what Android's "CA certificate" installer and `.crt` downloads expect).
     pub fn cert_der(&self) -> Result<Vec<u8>, EngineError> {
         use hudsucker::rustls::pki_types::{pem::PemObject, CertificateDer};
-        CertificateDer::from_pem_slice(self.cert_pem.as_bytes()).map(|c| c.to_vec()).map_err(|e| EngineError::Ca(e.to_string()))
+        CertificateDer::from_pem_slice(self.cert_pem.as_bytes())
+            .map(|c| c.to_vec())
+            .map_err(|e| EngineError::Ca(e.to_string()))
     }
 
     /// iOS/macOS configuration profile that installs the CA as a trusted root candidate.
@@ -128,13 +156,25 @@ fn random_uuid() -> String {
     let mut b = [0u8; 16];
     for chunk in b.chunks_mut(8) {
         let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-        h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
+        h.write_u128(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0),
+        );
         chunk.copy_from_slice(&h.finish().to_le_bytes());
     }
     b[6] = (b[6] & 0x0f) | 0x40;
     b[8] = (b[8] & 0x3f) | 0x80;
     let h: String = b.iter().map(|x| format!("{x:02X}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+    format!(
+        "{}-{}-{}-{}-{}",
+        &h[0..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..32]
+    )
 }
 
 /// Where the CA private key is kept.
@@ -155,21 +195,28 @@ mod keychain {
 
     pub fn get(service: &str, account: &str) -> Result<Option<String>, EngineError> {
         match get_generic_password(service, account) {
-            Ok(bytes) => String::from_utf8(bytes).map(Some).map_err(|e| EngineError::Ca(format!("keychain item is not UTF-8: {e}"))),
+            Ok(bytes) => String::from_utf8(bytes)
+                .map(Some)
+                .map_err(|e| EngineError::Ca(format!("keychain item is not UTF-8: {e}"))),
             Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
             Err(e) => Err(EngineError::Ca(format!("keychain read failed: {e}"))),
         }
     }
 
     pub fn set(service: &str, account: &str, key_pem: &str) -> Result<(), EngineError> {
-        set_generic_password(service, account, key_pem.as_bytes()).map_err(|e| EngineError::Ca(format!("keychain write failed: {e}")))
+        set_generic_password(service, account, key_pem.as_bytes())
+            .map_err(|e| EngineError::Ca(format!("keychain write failed: {e}")))
     }
 }
 
 #[cfg(unix)]
 fn write_private(path: &Path, data: &[u8]) -> std::io::Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
-    let mut f = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?;
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)?;
     f.write_all(data)
 }
 
@@ -200,23 +247,39 @@ mod tests {
         let d = std::env::temp_dir().join(format!("np-kc-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         let service = format!("dev.netproxy.test.{}", std::process::id());
-        let st = KeyStorage::Keychain { service: service.clone() };
+        let st = KeyStorage::Keychain {
+            service: service.clone(),
+        };
         // a) legacy plaintext key file gets moved into the keychain and deleted
         let legacy = CaMaterial::load_or_create(&d, "KC CA").unwrap();
         assert!(d.join("ca.key").exists());
         let migrated = CaMaterial::load_or_create_with(&d, "KC CA", &st).unwrap();
         assert_eq!(migrated.key_pem, legacy.key_pem);
-        assert!(!d.join("ca.key").exists(), "plaintext key must be gone after migration");
+        assert!(
+            !d.join("ca.key").exists(),
+            "plaintext key must be gone after migration"
+        );
         // b) reload comes from the keychain
         let again = CaMaterial::load_or_create_with(&d, "KC CA", &st).unwrap();
-        assert_eq!((again.cert_pem, again.key_pem), (legacy.cert_pem, legacy.key_pem));
+        assert_eq!(
+            (again.cert_pem, again.key_pem),
+            (legacy.cert_pem, legacy.key_pem)
+        );
         // c) fresh dir => generated straight into the keychain, never on disk
         let d2 = d.join("fresh");
         let fresh = CaMaterial::load_or_create_with(&d2, "KC CA 2", &st).unwrap();
         assert!(!d2.join("ca.key").exists() && d2.join("ca.pem").exists());
-        assert_eq!(CaMaterial::load_or_create_with(&d2, "KC CA 2", &st).unwrap().key_pem, fresh.key_pem);
+        assert_eq!(
+            CaMaterial::load_or_create_with(&d2, "KC CA 2", &st)
+                .unwrap()
+                .key_pem,
+            fresh.key_pem
+        );
         // cleanup keychain items
-        for acct in [d.to_string_lossy().into_owned(), d2.to_string_lossy().into_owned()] {
+        for acct in [
+            d.to_string_lossy().into_owned(),
+            d2.to_string_lossy().into_owned(),
+        ] {
             let _ = security_framework::passwords::delete_generic_password(&service, &acct);
         }
         fs::remove_dir_all(&d).unwrap();
@@ -232,7 +295,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_eq!(fs::metadata(d.join("ca.key")).unwrap().permissions().mode() & 0o777, 0o600);
+            assert_eq!(
+                fs::metadata(d.join("ca.key")).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
         }
         fs::remove_dir_all(&d).unwrap();
     }

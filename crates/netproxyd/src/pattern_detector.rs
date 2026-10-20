@@ -26,12 +26,38 @@ lazy_static! {
 
 /// Common API path keywords that are typically static
 const STATIC_KEYWORDS: &[&str] = &[
-    "api", "v1", "v2", "v3", "admin", "public", "private",
-    "users", "posts", "products", "orders", "items", "accounts",
-    "search", "list", "detail", "profile", "settings", "config",
-    "auth", "login", "logout", "signup", "register",
-    "dashboard", "analytics", "reports", "exports",
-    "messages", "notifications", "alerts", "comments",
+    "api",
+    "v1",
+    "v2",
+    "v3",
+    "admin",
+    "public",
+    "private",
+    "users",
+    "posts",
+    "products",
+    "orders",
+    "items",
+    "accounts",
+    "search",
+    "list",
+    "detail",
+    "profile",
+    "settings",
+    "config",
+    "auth",
+    "login",
+    "logout",
+    "signup",
+    "register",
+    "dashboard",
+    "analytics",
+    "reports",
+    "exports",
+    "messages",
+    "notifications",
+    "alerts",
+    "comments",
 ];
 
 /// Type of a path segment
@@ -81,10 +107,7 @@ pub struct PatternDetector;
 impl PatternDetector {
     /// Analyze a URL path and generate pattern suggestions
     pub fn analyze(path: &str) -> PathAnalysis {
-        let segments: Vec<&str> = path
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .collect();
+        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
         let analyzed_segments: Vec<PathSegmentType> = segments
             .iter()
@@ -154,10 +177,7 @@ impl PatternDetector {
     }
 
     /// Generate pattern suggestions with different specificity levels
-    fn generate_suggestions(
-        path: &str,
-        segments: &[PathSegmentType],
-    ) -> Vec<PatternSuggestion> {
+    fn generate_suggestions(path: &str, segments: &[PathSegmentType]) -> Vec<PatternSuggestion> {
         let mut suggestions = Vec::new();
 
         // 1. Exact match (lowest risk)
@@ -324,10 +344,7 @@ mod tests {
     fn detects_timestamp() {
         let analysis = PatternDetector::analyze("/events/1697558400");
         assert_eq!(analysis.segments.len(), 2);
-        assert!(matches!(
-            analysis.segments[1],
-            PathSegmentType::Timestamp
-        ));
+        assert!(matches!(analysis.segments[1], PathSegmentType::Timestamp));
     }
 
     #[test]
@@ -378,16 +395,33 @@ mod tests {
 
     #[test]
     fn handles_mixed_segments() {
-        let analysis = PatternDetector::analyze("/api/v1/users/12345/posts/550e8400-e29b-41d4-a716-446655440000/comments");
+        let analysis = PatternDetector::analyze(
+            "/api/v1/users/12345/posts/550e8400-e29b-41d4-a716-446655440000/comments",
+        );
 
         // Check segments
-        assert!(matches!(analysis.segments[0], PathSegmentType::Static { .. }));
-        assert!(matches!(analysis.segments[1], PathSegmentType::Static { .. }));
-        assert!(matches!(analysis.segments[2], PathSegmentType::Static { .. }));
+        assert!(matches!(
+            analysis.segments[0],
+            PathSegmentType::Static { .. }
+        ));
+        assert!(matches!(
+            analysis.segments[1],
+            PathSegmentType::Static { .. }
+        ));
+        assert!(matches!(
+            analysis.segments[2],
+            PathSegmentType::Static { .. }
+        ));
         assert!(matches!(analysis.segments[3], PathSegmentType::NumericId));
-        assert!(matches!(analysis.segments[4], PathSegmentType::Static { .. }));
+        assert!(matches!(
+            analysis.segments[4],
+            PathSegmentType::Static { .. }
+        ));
         assert!(matches!(analysis.segments[5], PathSegmentType::Uuid));
-        assert!(matches!(analysis.segments[6], PathSegmentType::Static { .. }));
+        assert!(matches!(
+            analysis.segments[6],
+            PathSegmentType::Static { .. }
+        ));
 
         // Check moderate pattern
         let moderate = analysis

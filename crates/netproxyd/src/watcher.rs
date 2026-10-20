@@ -2,8 +2,8 @@
 //!
 //! Monitors mocks.yaml for changes and triggers registry reload automatically.
 
-use np_mock::DynamicMockRegistry;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher};
+use np_mock::DynamicMockRegistry;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,10 +25,7 @@ impl MockConfigWatcher {
         registry: Arc<DynamicMockRegistry>,
     ) -> Result<Self, WatcherError> {
         if !config_path.exists() {
-            tracing::warn!(
-                "config file does not exist yet: {}",
-                config_path.display()
-            );
+            tracing::warn!("config file does not exist yet: {}", config_path.display());
         }
 
         let (event_tx, mut event_rx) = mpsc::channel(32);
@@ -57,7 +54,9 @@ impl MockConfigWatcher {
 
         watcher
             .watch(&watch_dir, RecursiveMode::NonRecursive)
-            .map_err(|e| WatcherError::Init(format!("failed to watch {}: {}", watch_dir.display(), e)))?;
+            .map_err(|e| {
+                WatcherError::Init(format!("failed to watch {}: {}", watch_dir.display(), e))
+            })?;
 
         tracing::info!("watching for changes: {}", config_path.display());
 
@@ -160,9 +159,11 @@ impl MockConfigWatcher {
             if let (Some(p_name), Some(config_name)) = (p.file_name(), config_path.file_name()) {
                 if p_name == config_name {
                     // Also check that parent directories match
-                    if let (Some(p_parent), Some(config_parent)) = (p.parent(), config_path.parent()) {
-                        return p_parent == config_parent ||
-                               p_parent.canonicalize().ok() == config_parent.canonicalize().ok();
+                    if let (Some(p_parent), Some(config_parent)) =
+                        (p.parent(), config_path.parent())
+                    {
+                        return p_parent == config_parent
+                            || p_parent.canonicalize().ok() == config_parent.canonicalize().ok();
                     }
                     return true;
                 }
@@ -217,9 +218,8 @@ rules: []
         )
         .unwrap();
 
-        let registry = Arc::new(
-            DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap(),
-        );
+        let registry =
+            Arc::new(DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap());
 
         // Should be able to create watcher
         let watcher = MockConfigWatcher::watch(config_path.clone(), registry.clone()).unwrap();
@@ -258,9 +258,8 @@ rules:
         )
         .unwrap();
 
-        let registry = Arc::new(
-            DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap(),
-        );
+        let registry =
+            Arc::new(DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap());
 
         assert_eq!(registry.list_static_rules().len(), 1);
 
@@ -300,7 +299,12 @@ rules:
 
         // Should have reloaded
         let rules = registry.list_static_rules();
-        assert_eq!(rules.len(), 2, "expected 2 rules after reload, got {}", rules.len());
+        assert_eq!(
+            rules.len(),
+            2,
+            "expected 2 rules after reload, got {}",
+            rules.len()
+        );
 
         watcher.stop().await;
     }
@@ -329,9 +333,8 @@ rules:
         )
         .unwrap();
 
-        let registry = Arc::new(
-            DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap(),
-        );
+        let registry =
+            Arc::new(DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap());
 
         assert_eq!(registry.list_static_rules().len(), 1);
 
@@ -346,7 +349,12 @@ rules:
 
         // Static rules should be cleared
         let rules = registry.list_static_rules();
-        assert_eq!(rules.len(), 0, "expected 0 rules after deletion, got {}", rules.len());
+        assert_eq!(
+            rules.len(),
+            0,
+            "expected 0 rules after deletion, got {}",
+            rules.len()
+        );
 
         watcher.stop().await;
     }
@@ -357,11 +365,14 @@ rules:
         let temp = TempDir::new().unwrap();
         let config_path = temp.path().join("mocks.yaml");
 
-        fs::write(&config_path, "version: 1\nfixtures_dir: ./fixtures\nrules: []").unwrap();
+        fs::write(
+            &config_path,
+            "version: 1\nfixtures_dir: ./fixtures\nrules: []",
+        )
+        .unwrap();
 
-        let registry = Arc::new(
-            DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap(),
-        );
+        let registry =
+            Arc::new(DynamicMockRegistry::new(config_path.clone(), Arc::new(NoMocks)).unwrap());
 
         let watcher = MockConfigWatcher::watch(config_path.clone(), registry.clone()).unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;

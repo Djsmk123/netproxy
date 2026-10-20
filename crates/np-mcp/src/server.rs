@@ -187,9 +187,15 @@ impl NetProxyMcpServer {
             "adb_proxy_status" => return self.handle_adb_proxy_status(arguments).await,
             "adb_install_cert" => return self.handle_adb_install_cert(arguments).await,
             "ios_simulators_list" => return self.handle_ios_simulators_list().await,
-            "ios_simulator_proxy_set" => return self.handle_ios_simulator_proxy_set(arguments).await,
-            "ios_simulator_proxy_clear" => return self.handle_ios_simulator_proxy_clear(arguments).await,
-            "ios_simulator_install_cert" => return self.handle_ios_simulator_install_cert(arguments).await,
+            "ios_simulator_proxy_set" => {
+                return self.handle_ios_simulator_proxy_set(arguments).await
+            }
+            "ios_simulator_proxy_clear" => {
+                return self.handle_ios_simulator_proxy_clear(arguments).await
+            }
+            "ios_simulator_install_cert" => {
+                return self.handle_ios_simulator_install_cert(arguments).await
+            }
             "chrome_launch_with_proxy" => return self.handle_chrome_launch(arguments).await,
             "chrome_close" => return self.handle_chrome_close().await,
             "session_save" => return self.handle_session_save(arguments).await,
@@ -227,10 +233,7 @@ impl NetProxyMcpServer {
                 }
                 let args: Args = serde_json::from_value(arguments).unwrap_or(Args { port: None });
                 let listen = args.port.map(|p| format!("127.0.0.1:{}", p));
-                (
-                    "engine.start",
-                    json!({ "listen": listen }),
-                )
+                ("engine.start", json!({ "listen": listen }))
             }
             "engine_stop" => ("engine.stop", json!({})),
             "engine_status" => ("engine.status", json!({})),
@@ -244,10 +247,7 @@ impl NetProxyMcpServer {
                 }
                 let args: Args = serde_json::from_value(arguments).unwrap_or(Args { port: None });
                 let listen = args.port.map(|p| format!("127.0.0.1:{}", p));
-                (
-                    "engine.start",
-                    json!({ "listen": listen }),
-                )
+                ("engine.start", json!({ "listen": listen }))
             }
 
             // CA certificate
@@ -519,13 +519,13 @@ impl NetProxyMcpServer {
 
         let args: Args = serde_json::from_value(arguments).unwrap_or(Args { interface: None });
 
-        crate::system_proxy::get_system_proxy_status(args.interface.as_deref()).map_err(
-            |e| McpError {
+        crate::system_proxy::get_system_proxy_status(args.interface.as_deref()).map_err(|e| {
+            McpError {
                 code: E_INTERNAL,
                 message: e.to_string(),
                 data: None,
-            },
-        )
+            }
+        })
     }
 
     // ==================== ADB Handlers ====================
@@ -552,12 +552,10 @@ impl NetProxyMcpServer {
             data: None,
         })?;
 
-        crate::adb::set_proxy(args.device.as_deref(), &args.host, args.port).map_err(|e| {
-            McpError {
-                code: E_INTERNAL,
-                message: e.to_string(),
-                data: None,
-            }
+        crate::adb::set_proxy(args.device.as_deref(), &args.host, args.port).map_err(|e| McpError {
+            code: E_INTERNAL,
+            message: e.to_string(),
+            data: None,
         })
     }
 
@@ -607,12 +605,10 @@ impl NetProxyMcpServer {
             data: None,
         })?;
 
-        crate::adb::install_ca_cert(args.device.as_deref(), &args.cert_path).map_err(|e| {
-            McpError {
-                code: E_INTERNAL,
-                message: e.to_string(),
-                data: None,
-            }
+        crate::adb::install_ca_cert(args.device.as_deref(), &args.cert_path).map_err(|e| McpError {
+            code: E_INTERNAL,
+            message: e.to_string(),
+            data: None,
         })
     }
 
@@ -780,13 +776,14 @@ impl NetProxyMcpServer {
         };
 
         let mocks = if args.include_mocks.unwrap_or(true) {
-            let result = client.call("mocks.list", json!({})).await.map_err(|e| {
-                McpError {
+            let result = client
+                .call("mocks.list", json!({}))
+                .await
+                .map_err(|e| McpError {
                     code: E_INTERNAL,
                     message: e.to_string(),
                     data: None,
-                }
-            })?;
+                })?;
             result["rules"].as_array().cloned().unwrap_or_default()
         } else {
             vec![]
@@ -825,13 +822,12 @@ impl NetProxyMcpServer {
                 data: None,
             })?;
 
-        let session = crate::sessions::load_session(data_dir, &args.name).map_err(|e| {
-            McpError {
+        let session =
+            crate::sessions::load_session(data_dir, &args.name).map_err(|e| McpError {
                 code: E_INTERNAL,
                 message: e.to_string(),
                 data: None,
-            }
-        })?;
+            })?;
 
         // Restore mocks if requested
         if args.restore_mocks.unwrap_or(true) {
@@ -844,10 +840,7 @@ impl NetProxyMcpServer {
                 })?;
 
             for mock in &session.mocks {
-                client
-                    .call("mocks.add", json!({ "rule": mock }))
-                    .await
-                    .ok();
+                client.call("mocks.add", json!({ "rule": mock })).await.ok();
             }
         }
 

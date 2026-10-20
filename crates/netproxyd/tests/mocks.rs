@@ -1,7 +1,10 @@
 //! Integration tests for the mock rule runtime.
 
 use futures::{SinkExt, StreamExt};
-use netproxyd::{control, daemon::{Daemon, DaemonConfig}};
+use netproxyd::{
+    control,
+    daemon::{Daemon, DaemonConfig},
+};
 use np_engine::HudsuckerEngine;
 use np_model::*;
 use serde_json::{json, Value};
@@ -35,13 +38,21 @@ async fn rig_with_mocks(mocks_yaml: &str, fixtures: &[(&str, &[u8])]) -> Rig {
     // Load mock config if mocks.yaml exists
     let mock_config_path = data_path.join("mocks.yaml");
     if mock_config_path.exists() {
-        cfg = cfg.with_mock_config(mock_config_path).expect("load mocks.yaml");
+        cfg = cfg
+            .with_mock_config(mock_config_path)
+            .expect("load mocks.yaml");
     }
 
     let daemon = Daemon::new(cfg, Arc::new(HudsuckerEngine)).unwrap();
-    let ctl = control::serve(daemon.clone(), &data_path.join("run")).await.unwrap();
+    let ctl = control::serve(daemon.clone(), &data_path.join("run"))
+        .await
+        .unwrap();
 
-    Rig { _dir: dir, daemon, ctl }
+    Rig {
+        _dir: dir,
+        daemon,
+        ctl,
+    }
 }
 
 struct Client {
@@ -55,22 +66,29 @@ impl Client {
         let mut c = Client {
             f: Framed::new(
                 UnixStream::connect(&r.ctl.info.socket).await.unwrap(),
-                LinesCodec::new_with_max_length(16 << 20)
+                LinesCodec::new_with_max_length(16 << 20),
             ),
             next: 0,
             pending: Default::default(),
         };
-        let h = c.call("hello", json!({
-            "token": r.ctl.info.token,
-            "api_version": API_VERSION,
-            "client": {"name": "test"}
-        })).await.unwrap();
+        let h = c
+            .call(
+                "hello",
+                json!({
+                    "token": r.ctl.info.token,
+                    "api_version": API_VERSION,
+                    "client": {"name": "test"}
+                }),
+            )
+            .await
+            .unwrap();
         assert_eq!(h["api_version"], API_VERSION);
         c
     }
 
     async fn line(&mut self) -> Option<Value> {
-        match tokio::time::timeout(Duration::from_secs(10), self.f.next()).await
+        match tokio::time::timeout(Duration::from_secs(10), self.f.next())
+            .await
             .expect("timed out waiting for server")
         {
             Some(Ok(l)) => Some(serde_json::from_str(&l).unwrap()),
@@ -81,12 +99,18 @@ impl Client {
     async fn call(&mut self, method: &str, params: Value) -> Result<Value, Value> {
         self.next += 1;
         let id = self.next;
-        self.f.send(json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params
-        }).to_string()).await.unwrap();
+        self.f
+            .send(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "method": method,
+                    "params": params
+                })
+                .to_string(),
+            )
+            .await
+            .unwrap();
 
         loop {
             let v = self.line().await.expect("connection closed");
@@ -138,9 +162,10 @@ rules:
         file: response.json
 "#;
 
-    let fixtures = [
-        ("response.json", br#"{"status":"ok","data":{"id":123,"name":"test"}}"# as &[u8])
-    ];
+    let fixtures = [(
+        "response.json",
+        br#"{"status":"ok","data":{"id":123,"name":"test"}}"# as &[u8],
+    )];
 
     let r = rig_with_mocks(mocks, &fixtures).await;
     let mut c = Client::connect(&r).await;
@@ -151,7 +176,9 @@ rules:
     let listen = st["listen"].as_str().unwrap();
 
     // Subscribe to events
-    c.call("events.subscribe", json!({"since": 0})).await.unwrap();
+    c.call("events.subscribe", json!({"since": 0}))
+        .await
+        .unwrap();
 
     // Make request through proxy
     let client = reqwest::Client::builder()
@@ -167,7 +194,10 @@ rules:
 
     // Verify response
     assert_eq!(resp.status(), 200);
-    assert_eq!(resp.headers().get("content-type").unwrap(), "application/json");
+    assert_eq!(
+        resp.headers().get("content-type").unwrap(),
+        "application/json"
+    );
     assert_eq!(resp.headers().get("x-custom").unwrap(), "test-value");
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -194,8 +224,16 @@ rules:
     }
 
     // Verify MockHit event was emitted
-    assert_eq!(mock_hit, Some("test-mock".to_string()), "MockHit event should be emitted");
-    assert_eq!(response_head, Some(true), "ResponseHead should have mocked=true");
+    assert_eq!(
+        mock_hit,
+        Some("test-mock".to_string()),
+        "MockHit event should be emitted"
+    );
+    assert_eq!(
+        response_head,
+        Some(true),
+        "ResponseHead should have mocked=true"
+    );
 
     c.call("engine.stop", Value::Null).await.unwrap();
     r.ctl.stop().await;
@@ -235,7 +273,9 @@ rules:
     let st = c.call("engine.start", Value::Null).await.unwrap();
     let listen = st["listen"].as_str().unwrap();
 
-    c.call("events.subscribe", json!({"since": 0})).await.unwrap();
+    c.call("events.subscribe", json!({"since": 0}))
+        .await
+        .unwrap();
 
     let client = reqwest::Client::builder()
         .proxy(reqwest::Proxy::http(format!("http://{}", listen)).unwrap())
@@ -249,7 +289,10 @@ rules:
         .unwrap();
 
     let body = resp.text().await.unwrap();
-    assert_eq!(body, "high priority", "higher priority rule should match first");
+    assert_eq!(
+        body, "high priority",
+        "higher priority rule should match first"
+    );
 
     // Verify MockHit event has high-priority rule
     let mut mock_rule = None;
@@ -298,11 +341,7 @@ rules:
         .build()
         .unwrap();
 
-    let resp = client
-        .get("http://test.local/hello")
-        .send()
-        .await
-        .unwrap();
+    let resp = client.get("http://test.local/hello").send().await.unwrap();
 
     assert_eq!(resp.status(), 200);
     let body = resp.text().await.unwrap();
@@ -343,10 +382,18 @@ rules:
         .unwrap();
 
     // Test wildcard host
-    let resp = client.get("http://api.example.com/api/users").send().await.unwrap();
+    let resp = client
+        .get("http://api.example.com/api/users")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.text().await.unwrap(), "wildcard match");
 
-    let resp = client.get("http://staging.example.com/api/data").send().await.unwrap();
+    let resp = client
+        .get("http://staging.example.com/api/data")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.text().await.unwrap(), "wildcard match");
 
     // Non-matching host should not match (but will fail in real proxy, so we skip)
@@ -391,7 +438,9 @@ rules:
     let st = c.call("engine.start", Value::Null).await.unwrap();
     let listen = st["listen"].as_str().unwrap();
 
-    c.call("events.subscribe", json!({"since": 0})).await.unwrap();
+    c.call("events.subscribe", json!({"since": 0}))
+        .await
+        .unwrap();
 
     let client = reqwest::Client::builder()
         .proxy(reqwest::Proxy::http(format!("http://{}", listen)).unwrap())
@@ -412,7 +461,11 @@ rules:
             break;
         }
     }
-    assert_eq!(mock_rule, Some("fallback-rule".to_string()), "should match fallback, not disabled");
+    assert_eq!(
+        mock_rule,
+        Some("fallback-rule".to_string()),
+        "should match fallback, not disabled"
+    );
 
     c.call("engine.stop", Value::Null).await.unwrap();
     r.ctl.stop().await;
@@ -451,7 +504,9 @@ rules:
     let st = c.call("engine.start", Value::Null).await.unwrap();
     let listen = st["listen"].as_str().unwrap();
 
-    c.call("events.subscribe", json!({"since": 0})).await.unwrap();
+    c.call("events.subscribe", json!({"since": 0}))
+        .await
+        .unwrap();
 
     let client = reqwest::Client::builder()
         .proxy(reqwest::Proxy::http(format!("http://{}", listen)).unwrap())
@@ -459,7 +514,11 @@ rules:
         .unwrap();
 
     // First test: respond rule should work normally
-    let resp = client.get("http://test.local/respond").send().await.unwrap();
+    let resp = client
+        .get("http://test.local/respond")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.text().await.unwrap(), "respond matched");
 
     // Verify MockHit event was emitted for respond-rule
@@ -493,11 +552,17 @@ rules:
             }
         }
         // Stop when we see FlowFailed or FlowCompleted
-        if matches!(e.event, Event::FlowCompleted { .. } | Event::FlowFailed { .. }) {
+        if matches!(
+            e.event,
+            Event::FlowCompleted { .. } | Event::FlowFailed { .. }
+        ) {
             break;
         }
     }
-    assert!(!found_pass_mock, "pass action should NOT emit MockHit event");
+    assert!(
+        !found_pass_mock,
+        "pass action should NOT emit MockHit event"
+    );
 
     c.call("engine.stop", Value::Null).await.unwrap();
     r.ctl.stop().await;

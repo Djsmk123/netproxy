@@ -1,10 +1,13 @@
 //! Integration tests for dynamic mock registry and control API.
 
 use futures::{SinkExt, StreamExt};
-use netproxyd::{control, daemon::{Daemon, DaemonConfig}};
+use netproxyd::{
+    control,
+    daemon::{Daemon, DaemonConfig},
+};
 use np_engine::HudsuckerEngine;
 use serde_json::{json, Value};
-use std::{sync::Arc, fs};
+use std::{fs, sync::Arc};
 use tokio::net::UnixStream;
 use tokio_util::codec::{Framed, LinesCodec};
 
@@ -19,7 +22,9 @@ async fn rig(data_path: &std::path::Path) -> Rig {
         .unwrap();
     let daemon = Daemon::new(cfg, Arc::new(HudsuckerEngine)).unwrap();
     daemon.spawn_maintenance(std::time::Duration::from_secs(300));
-    let ctl = control::serve(daemon.clone(), &data_path.join("run")).await.unwrap();
+    let ctl = control::serve(daemon.clone(), &data_path.join("run"))
+        .await
+        .unwrap();
     Rig { daemon, ctl }
 }
 
@@ -33,8 +38,15 @@ impl Client {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await; // Give server time to start
         let sock = UnixStream::connect(&r.ctl.info.socket).await.unwrap();
         let mut sock = Framed::new(sock, LinesCodec::new_with_max_length(1 << 20));
-        let token = std::fs::read_to_string(&r.ctl.info.token_file).unwrap().trim().to_string();
-        sock.send(json!({"jsonrpc": "2.0", "method": "hello", "params": {"token": token}}).to_string()).await.unwrap();
+        let token = std::fs::read_to_string(&r.ctl.info.token_file)
+            .unwrap()
+            .trim()
+            .to_string();
+        sock.send(
+            json!({"jsonrpc": "2.0", "method": "hello", "params": {"token": token}}).to_string(),
+        )
+        .await
+        .unwrap();
         let resp = sock.next().await.unwrap().unwrap();
         let _: Value = serde_json::from_str(&resp).unwrap(); // Verify hello response
         Self { sock, next_id: 1 }
@@ -43,13 +55,21 @@ impl Client {
     async fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
         let id = self.next_id;
         self.next_id += 1;
-        self.sock.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string()).await.unwrap();
+        self.sock
+            .send(
+                json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string(),
+            )
+            .await
+            .unwrap();
         let line = self.sock.next().await.unwrap().unwrap();
         let resp: Value = serde_json::from_str(&line).unwrap();
         if let Some(result) = resp.get("result") {
             Ok(result.clone())
         } else if let Some(error) = resp.get("error") {
-            Err(error["message"].as_str().unwrap_or("unknown error").to_string())
+            Err(error["message"]
+                .as_str()
+                .unwrap_or("unknown error")
+                .to_string())
         } else {
             Err("invalid response".to_string())
         }
@@ -115,11 +135,17 @@ rules: []
     assert_eq!(resp["rules"].as_array().unwrap().len(), 1);
 
     // Get the rule
-    let resp = c.call("mocks.get", json!({"id": "dynamic-test"})).await.unwrap();
+    let resp = c
+        .call("mocks.get", json!({"id": "dynamic-test"}))
+        .await
+        .unwrap();
     assert_eq!(resp["rule"]["id"], "dynamic-test");
 
     // Remove the rule
-    let resp = c.call("mocks.remove", json!({"id": "dynamic-test"})).await.unwrap();
+    let resp = c
+        .call("mocks.remove", json!({"id": "dynamic-test"}))
+        .await
+        .unwrap();
     assert_eq!(resp["removed"], true);
 
     // List should be empty again
@@ -216,11 +242,17 @@ rules: []
         }
     });
 
-    let resp = c.call("mocks.update", json!({"rule": updated_rule})).await.unwrap();
+    let resp = c
+        .call("mocks.update", json!({"rule": updated_rule}))
+        .await
+        .unwrap();
     assert_eq!(resp["updated"], true);
 
     // Verify update
-    let resp = c.call("mocks.get", json!({"id": "test-update"})).await.unwrap();
+    let resp = c
+        .call("mocks.get", json!({"id": "test-update"}))
+        .await
+        .unwrap();
     assert_eq!(resp["rule"]["priority"], 200);
     assert_eq!(resp["rule"]["match"]["host"], "updated.local");
 }

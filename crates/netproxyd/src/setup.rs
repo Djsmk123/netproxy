@@ -42,23 +42,53 @@ impl DeviceSetup {
 }
 
 fn resp(content_type: &str, body: Bytes, filename: Option<&str>) -> MockDecision {
-    let mut headers = vec![("content-type".to_owned(), content_type.to_owned()), ("cache-control".to_owned(), "no-store".to_owned())];
+    let mut headers = vec![
+        ("content-type".to_owned(), content_type.to_owned()),
+        ("cache-control".to_owned(), "no-store".to_owned()),
+    ];
     if let Some(f) = filename {
-        headers.push(("content-disposition".to_owned(), format!("attachment; filename=\"{f}\"")));
+        headers.push((
+            "content-disposition".to_owned(),
+            format!("attachment; filename=\"{f}\""),
+        ));
     }
-    MockDecision::Respond(MockResponse { rule: SETUP_RULE.into(), status: 200, headers, body })
+    MockDecision::Respond(MockResponse {
+        rule: SETUP_RULE.into(),
+        status: 200,
+        headers,
+        body,
+    })
 }
 
 impl MockResolver for DeviceSetup {
     fn resolve(&self, req: &RequestView<'_>) -> MockDecision {
-        let host = req.host.map(|h| h.split(':').next().unwrap_or(h).to_ascii_lowercase());
+        let host = req
+            .host
+            .map(|h| h.split(':').next().unwrap_or(h).to_ascii_lowercase());
         if host.as_deref() == Some(SETUP_HOST) && req.method == "GET" {
             return match req.path {
                 "/" | "/index.html" => resp("text/html; charset=utf-8", Self::page(), None),
-                "/ca.pem" => resp("application/x-pem-file", self.pem.clone(), Some("netproxy-ca.pem")),
-                "/ca.crt" | "/ca.cer" => resp("application/x-x509-ca-cert", self.der.clone(), Some("netproxy-ca.crt")),
-                "/ca.mobileconfig" => resp("application/x-apple-aspen-config", self.profile.clone(), Some("netproxy-ca.mobileconfig")),
-                _ => MockDecision::Respond(MockResponse { rule: SETUP_RULE.into(), status: 404, headers: vec![], body: Bytes::from_static(b"not found") }),
+                "/ca.pem" => resp(
+                    "application/x-pem-file",
+                    self.pem.clone(),
+                    Some("netproxy-ca.pem"),
+                ),
+                "/ca.crt" | "/ca.cer" => resp(
+                    "application/x-x509-ca-cert",
+                    self.der.clone(),
+                    Some("netproxy-ca.crt"),
+                ),
+                "/ca.mobileconfig" => resp(
+                    "application/x-apple-aspen-config",
+                    self.profile.clone(),
+                    Some("netproxy-ca.mobileconfig"),
+                ),
+                _ => MockDecision::Respond(MockResponse {
+                    rule: SETUP_RULE.into(),
+                    status: 404,
+                    headers: vec![],
+                    body: Bytes::from_static(b"not found"),
+                }),
             };
         }
         self.inner.resolve(req)

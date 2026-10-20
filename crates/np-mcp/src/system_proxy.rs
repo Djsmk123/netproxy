@@ -44,7 +44,11 @@ fn get_primary_interface() -> Result<String, SystemProxyError> {
 }
 
 /// Set system proxy for HTTP and HTTPS.
-pub fn set_system_proxy(host: &str, port: u16, interface: Option<&str>) -> Result<Value, SystemProxyError> {
+pub fn set_system_proxy(
+    host: &str,
+    port: u16,
+    interface: Option<&str>,
+) -> Result<Value, SystemProxyError> {
     #[cfg(not(target_os = "macos"))]
     {
         return Err(SystemProxyError::UnsupportedPlatform(
@@ -61,12 +65,7 @@ pub fn set_system_proxy(host: &str, port: u16, interface: Option<&str>) -> Resul
 
         // Set web proxy (HTTP)
         let http_output = Command::new("networksetup")
-            .args(&[
-                "-setwebproxy",
-                &interface,
-                host,
-                &port.to_string(),
-            ])
+            .args(&["-setwebproxy", &interface, host, &port.to_string()])
             .output()
             .map_err(|e| SystemProxyError::CommandFailed(e.to_string()))?;
 
@@ -78,12 +77,7 @@ pub fn set_system_proxy(host: &str, port: u16, interface: Option<&str>) -> Resul
 
         // Set secure web proxy (HTTPS)
         let https_output = Command::new("networksetup")
-            .args(&[
-                "-setsecurewebproxy",
-                &interface,
-                host,
-                &port.to_string(),
-            ])
+            .args(&["-setsecurewebproxy", &interface, host, &port.to_string()])
             .output()
             .map_err(|e| SystemProxyError::CommandFailed(e.to_string()))?;
 

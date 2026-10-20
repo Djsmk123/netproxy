@@ -46,7 +46,9 @@ impl DynamicMockRegistry {
                 .map_err(|e| RegistryError::Config(format!("invalid YAML: {}", e)))?;
 
             // Resolve fixtures_dir relative to config file
-            let config_dir = config_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+            let config_dir = config_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
             let mut config = config;
             if !config.fixtures_dir.is_absolute() {
                 config.fixtures_dir = config_dir.join(&config.fixtures_dir);
@@ -91,7 +93,10 @@ impl DynamicMockRegistry {
             .map_err(|e| RegistryError::Config(format!("invalid YAML: {}", e)))?;
 
         // Resolve fixtures_dir relative to config file
-        let config_dir = self.config_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let config_dir = self
+            .config_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
         let mut config = config;
         if !config.fixtures_dir.is_absolute() {
             config.fixtures_dir = config_dir.join(&config.fixtures_dir);
@@ -194,7 +199,13 @@ impl DynamicMockRegistry {
     /// Get a rule by ID (checks both dynamic and static).
     pub fn get_rule(&self, id: &str) -> Option<Rule> {
         // Check dynamic first
-        if let Some(rule) = self.dynamic_rules.read().unwrap().iter().find(|r| r.id == id) {
+        if let Some(rule) = self
+            .dynamic_rules
+            .read()
+            .unwrap()
+            .iter()
+            .find(|r| r.id == id)
+        {
             return Some(rule.clone());
         }
 
@@ -279,33 +290,35 @@ impl DynamicMockRegistry {
             use np_engine::engine::MockResponse;
 
             match &rule.action {
-                Action::Respond { status, headers, body, .. } => {
+                Action::Respond {
+                    status,
+                    headers,
+                    body,
+                    ..
+                } => {
                     // Load body (simplified - no fixture support without resolver)
                     let body_bytes = match body {
-                        crate::schema::BodySource::Inline { inline } => {
-                            Bytes::from(inline.clone())
-                        }
-                        _ => {
-                            Bytes::from(r#"{"error":"fixture not supported in minimal mode"}"#)
-                        }
+                        crate::schema::BodySource::Inline { inline } => Bytes::from(inline.clone()),
+                        _ => Bytes::from(r#"{"error":"fixture not supported in minimal mode"}"#),
                     };
 
                     MockDecision::Respond(MockResponse {
                         rule: rule.id.clone(),
                         status: *status,
-                        headers: headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                        headers: headers
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect(),
                         body: body_bytes,
                     })
                 }
                 Action::Pass => MockDecision::Pass,
-                Action::Fail { error } => {
-                    MockDecision::Respond(MockResponse {
-                        rule: rule.id.clone(),
-                        status: 503,
-                        headers: vec![("content-type".to_string(), "text/plain".to_string())],
-                        body: Bytes::from(format!("Simulated error: {}", error)),
-                    })
-                }
+                Action::Fail { error } => MockDecision::Respond(MockResponse {
+                    rule: rule.id.clone(),
+                    status: 503,
+                    headers: vec![("content-type".to_string(), "text/plain".to_string())],
+                    body: Bytes::from(format!("Simulated error: {}", error)),
+                }),
             }
         }
     }
@@ -359,10 +372,7 @@ mod tests {
     fn add_and_list_dynamic_rules() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("nonexistent.yaml");
-        let registry = DynamicMockRegistry::new(
-            config_path,
-            Arc::new(NoMocks),
-        ).unwrap();
+        let registry = DynamicMockRegistry::new(config_path, Arc::new(NoMocks)).unwrap();
 
         let rule1 = test_rule("rule1", 100);
         let rule2 = test_rule("rule2", 200);
@@ -382,10 +392,7 @@ mod tests {
     fn remove_dynamic_rule() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("nonexistent.yaml");
-        let registry = DynamicMockRegistry::new(
-            config_path,
-            Arc::new(NoMocks),
-        ).unwrap();
+        let registry = DynamicMockRegistry::new(config_path, Arc::new(NoMocks)).unwrap();
 
         let rule = test_rule("test", 100);
         registry.add_rule(rule).unwrap();
@@ -405,10 +412,7 @@ mod tests {
     fn duplicate_id_rejected() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("nonexistent.yaml");
-        let registry = DynamicMockRegistry::new(
-            config_path,
-            Arc::new(NoMocks),
-        ).unwrap();
+        let registry = DynamicMockRegistry::new(config_path, Arc::new(NoMocks)).unwrap();
 
         let rule = test_rule("dup", 100);
         registry.add_rule(rule.clone()).unwrap();
@@ -422,10 +426,7 @@ mod tests {
     fn update_rule() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("nonexistent.yaml");
-        let registry = DynamicMockRegistry::new(
-            config_path,
-            Arc::new(NoMocks),
-        ).unwrap();
+        let registry = DynamicMockRegistry::new(config_path, Arc::new(NoMocks)).unwrap();
 
         let rule = test_rule("test", 100);
         registry.add_rule(rule).unwrap();
@@ -445,10 +446,7 @@ mod tests {
     fn clear_dynamic_rules() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("nonexistent.yaml");
-        let registry = DynamicMockRegistry::new(
-            config_path,
-            Arc::new(NoMocks),
-        ).unwrap();
+        let registry = DynamicMockRegistry::new(config_path, Arc::new(NoMocks)).unwrap();
 
         registry.add_rule(test_rule("rule1", 100)).unwrap();
         registry.add_rule(test_rule("rule2", 200)).unwrap();

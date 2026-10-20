@@ -62,15 +62,38 @@ pub enum FlowFailClass {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Event {
-    EngineStarted { listen: String, engine: String, engine_version: String },
-    EngineStopped { reason: String },
+    EngineStarted {
+        listen: String,
+        engine: String,
+        engine_version: String,
+    },
+    EngineStopped {
+        reason: String,
+    },
     /// `count` events were discarded at the producer edge immediately before this point.
-    EventsDropped { count: u64 },
+    EventsDropped {
+        count: u64,
+    },
 
-    ConnectionOpened { conn: ConnId, client: String, target: String },
-    TlsHello { conn: ConnId, sni: Option<String>, alpn: Vec<String> },
-    ClientTlsFailed { conn: Option<ConnId>, class: ClientTlsClass, detail: String },
-    ConnectionClosed { conn: ConnId, requests: u64 },
+    ConnectionOpened {
+        conn: ConnId,
+        client: String,
+        target: String,
+    },
+    TlsHello {
+        conn: ConnId,
+        sni: Option<String>,
+        alpn: Vec<String>,
+    },
+    ClientTlsFailed {
+        conn: Option<ConnId>,
+        class: ClientTlsClass,
+        detail: String,
+    },
+    ConnectionClosed {
+        conn: ConnId,
+        requests: u64,
+    },
 
     RequestHead {
         flow: FlowId,
@@ -82,9 +105,22 @@ pub enum Event {
         http_version: String,
         headers: Headers,
     },
-    ResponseHead { flow: FlowId, status: u16, ttfb_us: u64, headers: Headers, mocked: bool },
-    BodyFirstByte { flow: FlowId, dir: BodyDir },
-    BodyProgress { flow: FlowId, dir: BodyDir, total: u64 },
+    ResponseHead {
+        flow: FlowId,
+        status: u16,
+        ttfb_us: u64,
+        headers: Headers,
+        mocked: bool,
+    },
+    BodyFirstByte {
+        flow: FlowId,
+        dir: BodyDir,
+    },
+    BodyProgress {
+        flow: FlowId,
+        dir: BodyDir,
+        total: u64,
+    },
     BodyEnd {
         flow: FlowId,
         dir: BodyDir,
@@ -98,14 +134,38 @@ pub enum Event {
         /// True when the stored copy is incomplete (per-body cap, full write queue, or no store).
         truncated: bool,
     },
-    BodyError { flow: FlowId, dir: BodyDir, total: u64, error: String },
-    BodyAborted { flow: FlowId, dir: BodyDir, total: u64 },
+    BodyError {
+        flow: FlowId,
+        dir: BodyDir,
+        total: u64,
+        error: String,
+    },
+    BodyAborted {
+        flow: FlowId,
+        dir: BodyDir,
+        total: u64,
+    },
 
-    MockHit { flow: FlowId, rule: String },
-    FlowCompleted { flow: FlowId, status: Option<u16>, mocked: bool },
-    FlowFailed { flow: FlowId, class: FlowFailClass, detail: String },
+    MockHit {
+        flow: FlowId,
+        rule: String,
+    },
+    FlowCompleted {
+        flow: FlowId,
+        status: Option<u16>,
+        mocked: bool,
+    },
+    FlowFailed {
+        flow: FlowId,
+        class: FlowFailClass,
+        detail: String,
+    },
 
-    WsMessage { client: String, dir: WsDir, bytes: u64 },
+    WsMessage {
+        client: String,
+        dir: WsDir,
+        bytes: u64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,9 +179,15 @@ impl Event {
     pub fn flow(&self) -> Option<FlowId> {
         use Event::*;
         match self {
-            RequestHead { flow, .. } | ResponseHead { flow, .. } | BodyFirstByte { flow, .. }
-            | BodyProgress { flow, .. } | BodyEnd { flow, .. } | BodyError { flow, .. }
-            | BodyAborted { flow, .. } | MockHit { flow, .. } | FlowCompleted { flow, .. }
+            RequestHead { flow, .. }
+            | ResponseHead { flow, .. }
+            | BodyFirstByte { flow, .. }
+            | BodyProgress { flow, .. }
+            | BodyEnd { flow, .. }
+            | BodyError { flow, .. }
+            | BodyAborted { flow, .. }
+            | MockHit { flow, .. }
+            | FlowCompleted { flow, .. }
             | FlowFailed { flow, .. } => Some(*flow),
             _ => None,
         }
@@ -130,7 +196,9 @@ impl Event {
     pub fn conn(&self) -> Option<ConnId> {
         use Event::*;
         match self {
-            ConnectionOpened { conn, .. } | TlsHello { conn, .. } | ConnectionClosed { conn, .. } => Some(*conn),
+            ConnectionOpened { conn, .. }
+            | TlsHello { conn, .. }
+            | ConnectionClosed { conn, .. } => Some(*conn),
             ClientTlsFailed { conn, .. } | RequestHead { conn, .. } => *conn,
             _ => None,
         }
@@ -205,7 +273,12 @@ pub struct Violation(pub String);
 
 impl FlowState {
     pub fn new() -> Self {
-        Self { kind: FlowStateKind::Open, has_response_head: false, req_body_ended: false, res_body_ended: false }
+        Self {
+            kind: FlowStateKind::Open,
+            has_response_head: false,
+            req_body_ended: false,
+            res_body_ended: false,
+        }
     }
 
     /// Applies one flow event; returns a violation if the ordering contract is broken.
@@ -214,15 +287,34 @@ impl FlowState {
         use Event::*;
         let mut s = match (state, ev) {
             (None, RequestHead { .. }) => return Ok(Self::new()),
-            (None, other) => return Err(Violation(format!("first event of a flow was {}", other.kind()))),
-            (Some(s), RequestHead { .. }) => return Err(Violation(format!("second request_head for a flow in {:?}", s.kind))),
+            (None, other) => {
+                return Err(Violation(format!(
+                    "first event of a flow was {}",
+                    other.kind()
+                )))
+            }
+            (Some(s), RequestHead { .. }) => {
+                return Err(Violation(format!(
+                    "second request_head for a flow in {:?}",
+                    s.kind
+                )))
+            }
             (Some(s), _) => s,
         };
         if s.kind.is_terminal() {
             // A body_end / completion may legitimately trail a failure only for the *request* body.
             return match ev {
-                BodyEnd { dir: BodyDir::Req, .. } | BodyAborted { dir: BodyDir::Req, .. } => Ok(s),
-                other => Err(Violation(format!("{} after terminal state {:?}", other.kind(), s.kind))),
+                BodyEnd {
+                    dir: BodyDir::Req, ..
+                }
+                | BodyAborted {
+                    dir: BodyDir::Req, ..
+                } => Ok(s),
+                other => Err(Violation(format!(
+                    "{} after terminal state {:?}",
+                    other.kind(),
+                    s.kind
+                ))),
             };
         }
         match ev {
@@ -237,16 +329,29 @@ impl FlowState {
                     return Err(Violation("response body before response_head".into()));
                 }
             }
-            BodyEnd { dir: BodyDir::Req, .. } => s.req_body_ended = true,
-            BodyEnd { dir: BodyDir::Res, .. } => {
+            BodyEnd {
+                dir: BodyDir::Req, ..
+            } => s.req_body_ended = true,
+            BodyEnd {
+                dir: BodyDir::Res, ..
+            } => {
                 if !s.has_response_head {
                     return Err(Violation("response body_end before response_head".into()));
                 }
                 s.res_body_ended = true;
             }
-            BodyAborted { dir: BodyDir::Req, .. } => {}
-            BodyAborted { dir: BodyDir::Res, .. } | BodyError { dir: BodyDir::Res, .. } => s.kind = FlowStateKind::Aborted,
-            BodyError { dir: BodyDir::Req, .. } => s.kind = FlowStateKind::Aborted,
+            BodyAborted {
+                dir: BodyDir::Req, ..
+            } => {}
+            BodyAborted {
+                dir: BodyDir::Res, ..
+            }
+            | BodyError {
+                dir: BodyDir::Res, ..
+            } => s.kind = FlowStateKind::Aborted,
+            BodyError {
+                dir: BodyDir::Req, ..
+            } => s.kind = FlowStateKind::Aborted,
             MockHit { .. } => {}
             FlowCompleted { .. } => s.kind = FlowStateKind::Completed,
             FlowFailed { .. } => s.kind = FlowStateKind::Failed,
@@ -268,16 +373,33 @@ mod tests {
 
     fn head(f: u64) -> Event {
         Event::RequestHead {
-            flow: FlowId(f), conn: None, client: "c".into(), method: "GET".into(), uri: "https://h/p".into(),
-            host: None, http_version: "HTTP/1.1".into(), headers: vec![],
+            flow: FlowId(f),
+            conn: None,
+            client: "c".into(),
+            method: "GET".into(),
+            uri: "https://h/p".into(),
+            host: None,
+            http_version: "HTTP/1.1".into(),
+            headers: vec![],
         }
     }
 
     #[test]
     fn envelope_roundtrip_is_flat() {
-        let e = Envelope { run: "r".into(), seq: 7, ts_us: 9, event: Event::MockHit { flow: FlowId(3), rule: "x".into() } };
+        let e = Envelope {
+            run: "r".into(),
+            seq: 7,
+            ts_us: 9,
+            event: Event::MockHit {
+                flow: FlowId(3),
+                rule: "x".into(),
+            },
+        };
         let j = serde_json::to_string(&e).unwrap();
-        assert_eq!(j, r#"{"run":"r","seq":7,"ts_us":9,"kind":"mock_hit","flow":3,"rule":"x"}"#);
+        assert_eq!(
+            j,
+            r#"{"run":"r","seq":7,"ts_us":9,"kind":"mock_hit","flow":3,"rule":"x"}"#
+        );
         assert_eq!(serde_json::from_str::<Envelope>(&j).unwrap(), e);
     }
 
@@ -292,12 +414,61 @@ mod tests {
     fn happy_path_and_violations() {
         let f = FlowId(1);
         let s = FlowState::apply(None, &head(1)).unwrap();
-        let s = FlowState::apply(Some(s), &Event::ResponseHead { flow: f, status: 200, ttfb_us: 1, headers: vec![], mocked: false }).unwrap();
-        let s = FlowState::apply(Some(s), &Event::FlowCompleted { flow: f, status: Some(200), mocked: false }).unwrap();
+        let s = FlowState::apply(
+            Some(s),
+            &Event::ResponseHead {
+                flow: f,
+                status: 200,
+                ttfb_us: 1,
+                headers: vec![],
+                mocked: false,
+            },
+        )
+        .unwrap();
+        let s = FlowState::apply(
+            Some(s),
+            &Event::FlowCompleted {
+                flow: f,
+                status: Some(200),
+                mocked: false,
+            },
+        )
+        .unwrap();
         assert_eq!(s.kind, FlowStateKind::Completed);
-        assert!(FlowState::apply(Some(s), &Event::ResponseHead { flow: f, status: 200, ttfb_us: 1, headers: vec![], mocked: false }).is_err());
-        assert!(FlowState::apply(None, &Event::FlowCompleted { flow: f, status: None, mocked: false }).is_err());
+        assert!(FlowState::apply(
+            Some(s),
+            &Event::ResponseHead {
+                flow: f,
+                status: 200,
+                ttfb_us: 1,
+                headers: vec![],
+                mocked: false
+            }
+        )
+        .is_err());
+        assert!(FlowState::apply(
+            None,
+            &Event::FlowCompleted {
+                flow: f,
+                status: None,
+                mocked: false
+            }
+        )
+        .is_err());
         let open = FlowState::apply(None, &head(2)).unwrap();
-        assert!(FlowState::apply(Some(open), &Event::BodyEnd { flow: f, dir: BodyDir::Res, total: 0, chunks: 0, sha256: None, preview_b64: String::new(), stored_bytes: 0, truncated: false }).is_err());
+        assert!(FlowState::apply(
+            Some(open),
+            &Event::BodyEnd {
+                flow: f,
+                dir: BodyDir::Res,
+                total: 0,
+                chunks: 0,
+                sha256: None,
+                preview_b64: String::new(),
+                stored_bytes: 0,
+                truncated: false
+            }
+        )
+        .is_err());
     }
 }

@@ -28,7 +28,7 @@ impl RuleMockResolver {
             // For now, treat as relative to current directory
             // In production, this would be relative to mocks.yaml location
             std::env::current_dir()
-                .map_err(|e| ConfigError::Io(e))?
+                .map_err(ConfigError::Io)?
                 .join(config.fixtures_dir)
         };
 
@@ -183,8 +183,7 @@ mod tests {
             ],
         };
 
-        let resolver =
-            RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
+        let resolver = RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
 
         let headers = vec![];
         let req = RequestView {
@@ -223,8 +222,7 @@ mod tests {
             }],
         };
 
-        let resolver =
-            RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
+        let resolver = RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
 
         let headers = vec![];
         let req = RequestView {
@@ -262,8 +260,7 @@ mod tests {
             }],
         };
 
-        let resolver =
-            RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
+        let resolver = RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
 
         let headers = vec![];
         let req = RequestView {
@@ -303,8 +300,7 @@ mod tests {
             }],
         };
 
-        let resolver =
-            RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
+        let resolver = RuleMockResolver::new(config, Arc::new(NoMocks)).unwrap();
 
         let headers = vec![];
         let req = RequestView {

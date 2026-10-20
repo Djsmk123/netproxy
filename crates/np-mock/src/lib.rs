@@ -4,15 +4,15 @@
 //! mock responses. Rules are evaluated in priority order (higher priority first), and the
 //! first matching rule determines the response.
 
-mod schema;
-mod matcher;
 mod fixtures;
-mod resolver;
+mod matcher;
 mod registry;
+mod resolver;
+mod schema;
 mod validation;
 
-pub use schema::{MockConfig, Rule, MatchSpec, Action, BodySource};
-pub use fixtures::{FixtureResolver, FixtureError};
-pub use resolver::RuleMockResolver;
+pub use fixtures::{FixtureError, FixtureResolver};
 pub use registry::{DynamicMockRegistry, RegistryError};
-pub use validation::{RuleValidator, ValidationIssue, Severity, IssueKind};
+pub use resolver::RuleMockResolver;
+pub use schema::{Action, BodySource, MatchSpec, MockConfig, Rule};
+pub use validation::{IssueKind, RuleValidator, Severity, ValidationIssue};

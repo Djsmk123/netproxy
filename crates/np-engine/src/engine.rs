@@ -1,7 +1,11 @@
 //! The engine contract. Everything above this line (store, control API, UI, MCP) talks to
 //! `ProxyEngine`, never to a concrete proxy library.
 
-use crate::{body::{BodySink, NoBodies}, bus::EventSink, ca::CaMaterial};
+use crate::{
+    body::{BodySink, NoBodies},
+    bus::EventSink,
+    ca::CaMaterial,
+};
 use bytes::Bytes;
 use futures::future::BoxFuture;
 use np_model::Headers;

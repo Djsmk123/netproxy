@@ -135,6 +135,12 @@ pub fn delete_session(data_dir: &Path, name: &str) -> Result<Value, SessionError
 /// Sanitize filename to prevent path traversal.
 fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }

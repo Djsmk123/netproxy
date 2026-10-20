@@ -1,6 +1,6 @@
 //! Pattern matching logic for mock rules.
 
-use crate::schema::{Rule, MatchSpec};
+use crate::schema::{MatchSpec, Rule};
 use np_engine::engine::RequestView;
 use np_model::Headers;
 use regex::Regex;
@@ -133,7 +133,10 @@ fn matches_query(uri: &str, params: &HashMap<String, String>) -> bool {
         .split('&')
         .filter_map(|pair| {
             let mut parts = pair.splitn(2, '=');
-            Some((parts.next()?.to_string(), parts.next().unwrap_or("").to_string()))
+            Some((
+                parts.next()?.to_string(),
+                parts.next().unwrap_or("").to_string(),
+            ))
         })
         .collect();
 
@@ -237,7 +240,13 @@ mod tests {
         };
 
         let headers = vec![];
-        let req1 = test_request("GET", Some("api.example.com"), "/", "http://api.example.com/", &headers);
+        let req1 = test_request(
+            "GET",
+            Some("api.example.com"),
+            "/",
+            "http://api.example.com/",
+            &headers,
+        );
         let req2 = test_request("GET", Some("other.com"), "/", "http://other.com/", &headers);
 
         assert!(spec.matches(&req1));
@@ -252,8 +261,20 @@ mod tests {
         };
 
         let headers = vec![];
-        let req1 = test_request("GET", Some("api.example.com"), "/", "http://api.example.com/", &headers);
-        let req2 = test_request("GET", Some("staging.example.com"), "/", "http://staging.example.com/", &headers);
+        let req1 = test_request(
+            "GET",
+            Some("api.example.com"),
+            "/",
+            "http://api.example.com/",
+            &headers,
+        );
+        let req2 = test_request(
+            "GET",
+            Some("staging.example.com"),
+            "/",
+            "http://staging.example.com/",
+            &headers,
+        );
         let req3 = test_request("GET", Some("other.com"), "/", "http://other.com/", &headers);
 
         assert!(spec.matches(&req1));
@@ -269,8 +290,20 @@ mod tests {
         };
 
         let headers = vec![];
-        let req1 = test_request("GET", None, "/api/users", "http://test.com/api/users", &headers);
-        let req2 = test_request("GET", None, "/api/posts", "http://test.com/api/posts", &headers);
+        let req1 = test_request(
+            "GET",
+            None,
+            "/api/users",
+            "http://test.com/api/users",
+            &headers,
+        );
+        let req2 = test_request(
+            "GET",
+            None,
+            "/api/posts",
+            "http://test.com/api/posts",
+            &headers,
+        );
 
         assert!(spec.matches(&req1));
         assert!(!spec.matches(&req2));
@@ -284,9 +317,27 @@ mod tests {
         };
 
         let headers = vec![];
-        let req1 = test_request("GET", None, "/api/users", "http://test.com/api/users", &headers);
-        let req2 = test_request("GET", None, "/api/posts", "http://test.com/api/posts", &headers);
-        let req3 = test_request("GET", None, "/v2/users", "http://test.com/v2/users", &headers);
+        let req1 = test_request(
+            "GET",
+            None,
+            "/api/users",
+            "http://test.com/api/users",
+            &headers,
+        );
+        let req2 = test_request(
+            "GET",
+            None,
+            "/api/posts",
+            "http://test.com/api/posts",
+            &headers,
+        );
+        let req3 = test_request(
+            "GET",
+            None,
+            "/v2/users",
+            "http://test.com/v2/users",
+            &headers,
+        );
 
         assert!(spec.matches(&req1));
         assert!(spec.matches(&req2));
@@ -301,8 +352,20 @@ mod tests {
         };
 
         let headers = vec![];
-        let req1 = test_request("GET", None, "/v1/users/123", "http://test.com/v1/users/123", &headers);
-        let req2 = test_request("GET", None, "/v1/users/abc", "http://test.com/v1/users/abc", &headers);
+        let req1 = test_request(
+            "GET",
+            None,
+            "/v1/users/123",
+            "http://test.com/v1/users/123",
+            &headers,
+        );
+        let req2 = test_request(
+            "GET",
+            None,
+            "/v1/users/abc",
+            "http://test.com/v1/users/abc",
+            &headers,
+        );
 
         assert!(spec.matches(&req1));
         assert!(!spec.matches(&req2));
@@ -319,8 +382,20 @@ mod tests {
         };
 
         let headers = vec![];
-        let req1 = test_request("GET", None, "/api", "http://test.com/api?api_key=test123", &headers);
-        let req2 = test_request("GET", None, "/api", "http://test.com/api?api_key=other", &headers);
+        let req1 = test_request(
+            "GET",
+            None,
+            "/api",
+            "http://test.com/api?api_key=test123",
+            &headers,
+        );
+        let req2 = test_request(
+            "GET",
+            None,
+            "/api",
+            "http://test.com/api?api_key=other",
+            &headers,
+        );
         let req3 = test_request("GET", None, "/api", "http://test.com/api", &headers);
 
         assert!(spec.matches(&req1));
@@ -351,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_disabled_rule() {
-        use crate::schema::{Rule, Action};
+        use crate::schema::{Action, Rule};
 
         let rule = Rule {
             id: "test".to_string(),

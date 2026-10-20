@@ -158,7 +158,12 @@ pub fn install_ca_cert(udid: Option<&str>, cert_path: &str) -> Result<Value, Ios
 
     // Open certificate in simulator (opens in Safari, user installs from there)
     let output = Command::new("xcrun")
-        .args(&["simctl", "openurl", &sim_udid, &format!("file://{}", cert_path)])
+        .args(&[
+            "simctl",
+            "openurl",
+            &sim_udid,
+            &format!("file://{}", cert_path),
+        ])
         .output()
         .map_err(|e| IosSimError::CommandFailed(e.to_string()))?;
 

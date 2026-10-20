@@ -179,10 +179,7 @@ pub fn close_browser(browser: &str) -> Result<Value, BrowserError> {
             Browser::Safari => "Safari",
         };
 
-        Command::new("killall")
-            .arg(app_name)
-            .output()
-            .ok();
+        Command::new("killall").arg(app_name).output().ok();
 
         return Ok(json!({
             "success": true,
@@ -198,10 +195,7 @@ pub fn close_browser(browser: &str) -> Result<Value, BrowserError> {
             Browser::Safari => return Err(BrowserError::BrowserNotFound("Safari".to_string())),
         };
 
-        Command::new("pkill")
-            .arg(process_name)
-            .output()
-            .ok();
+        Command::new("pkill").arg(process_name).output().ok();
 
         return Ok(json!({
             "success": true,

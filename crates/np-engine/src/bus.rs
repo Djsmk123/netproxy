@@ -20,11 +20,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub fn now_us() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros() as u64
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as u64
 }
 
 enum Msg {
-    Event { ts_us: u64, dropped_before: u64, event: Event },
+    Event {
+        ts_us: u64,
+        dropped_before: u64,
+        event: Event,
+    },
     Close(oneshot::Sender<()>),
 }
 
@@ -45,10 +52,15 @@ impl EventSink {
     /// Non-blocking. Safe to call from the data path.
     pub fn emit(&self, event: Event) {
         let dropped_before = self.pending_drops.swap(0, Ordering::AcqRel);
-        let msg = Msg::Event { ts_us: now_us(), dropped_before, event };
+        let msg = Msg::Event {
+            ts_us: now_us(),
+            dropped_before,
+            event,
+        };
         if self.tx.try_send(msg).is_err() {
             // Queue full (or closed): count this event plus whatever we just tried to hand over.
-            self.pending_drops.fetch_add(dropped_before + 1, Ordering::AcqRel);
+            self.pending_drops
+                .fetch_add(dropped_before + 1, Ordering::AcqRel);
             self.stats.dropped.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -61,7 +73,10 @@ pub struct BusConfig {
 
 impl Default for BusConfig {
     fn default() -> Self {
-        Self { queue: 65_536, live_capacity: 8_192 }
+        Self {
+            queue: 65_536,
+            live_capacity: 8_192,
+        }
     }
 }
 
@@ -80,7 +95,11 @@ impl Bus {
         let (live, _) = broadcast::channel(cfg.live_capacity);
         let stats = Arc::new(BusStats::default());
         let pending_drops = Arc::new(AtomicU64::new(0));
-        let sink = EventSink { tx, pending_drops: pending_drops.clone(), stats: stats.clone() };
+        let sink = EventSink {
+            tx,
+            pending_drops: pending_drops.clone(),
+            stats: stats.clone(),
+        };
 
         let (run2, live2, stats2) = (run.clone(), live.clone(), stats.clone());
         tokio::spawn(async move {
@@ -93,14 +112,30 @@ impl Bus {
             };
             while let Some(msg) = rx.recv().await {
                 match msg {
-                    Msg::Event { ts_us, dropped_before, event } => {
+                    Msg::Event {
+                        ts_us,
+                        dropped_before,
+                        event,
+                    } => {
                         let mut batch = Vec::with_capacity(2);
                         if dropped_before > 0 {
                             seq += 1;
-                            batch.push(forward(Envelope { run: run2.clone(), seq, ts_us, event: Event::EventsDropped { count: dropped_before } }));
+                            batch.push(forward(Envelope {
+                                run: run2.clone(),
+                                seq,
+                                ts_us,
+                                event: Event::EventsDropped {
+                                    count: dropped_before,
+                                },
+                            }));
                         }
                         seq += 1;
-                        batch.push(forward(Envelope { run: run2.clone(), seq, ts_us, event }));
+                        batch.push(forward(Envelope {
+                            run: run2.clone(),
+                            seq,
+                            ts_us,
+                            event,
+                        }));
                         if let Some(d) = &durable {
                             for env in batch {
                                 if d.send(env).await.is_err() {
@@ -114,7 +149,12 @@ impl Bus {
                         let tail = pending_drops.swap(0, Ordering::AcqRel);
                         if tail > 0 {
                             seq += 1;
-                            let env = forward(Envelope { run: run2.clone(), seq, ts_us: now_us(), event: Event::EventsDropped { count: tail } });
+                            let env = forward(Envelope {
+                                run: run2.clone(),
+                                seq,
+                                ts_us: now_us(),
+                                event: Event::EventsDropped { count: tail },
+                            });
                             if let Some(d) = &durable {
                                 let _ = d.send(env).await;
                             }
@@ -125,7 +165,12 @@ impl Bus {
                 }
             }
         });
-        Bus { run, sink, live, stats }
+        Bus {
+            run,
+            sink,
+            live,
+            stats,
+        }
     }
 
     pub fn run(&self) -> &str {
@@ -159,7 +204,10 @@ mod tests {
     use np_model::FlowId;
 
     fn ev(i: u64) -> Event {
-        Event::MockHit { flow: FlowId(i), rule: "r".into() }
+        Event::MockHit {
+            flow: FlowId(i),
+            rule: "r".into(),
+        }
     }
 
     #[tokio::test]
@@ -183,12 +231,22 @@ mod tests {
     async fn drops_are_marked_and_seq_stays_contiguous() {
         // Tiny queue + a durable consumer that is not reading => sequencer stalls => producers drop.
         let (dtx, mut drx) = mpsc::channel(1);
-        let bus = Bus::spawn("r".into(), BusConfig { queue: 8, live_capacity: 16 }, Some(dtx));
+        let bus = Bus::spawn(
+            "r".into(),
+            BusConfig {
+                queue: 8,
+                live_capacity: 16,
+            },
+            Some(dtx),
+        );
         let sink = bus.sink();
         for i in 0..200 {
             sink.emit(ev(i));
         }
-        assert!(bus.stats().dropped.load(Ordering::Relaxed) > 0, "expected producer-side drops");
+        assert!(
+            bus.stats().dropped.load(Ordering::Relaxed) > 0,
+            "expected producer-side drops"
+        );
         // Now drain concurrently while closing.
         let drain = tokio::spawn(async move {
             let mut out = vec![];
@@ -205,15 +263,38 @@ mod tests {
             assert_eq!(e.seq, i as u64 + 1);
         }
         // conservation: delivered + dropped == emitted
-        let delivered = out.iter().filter(|e| !matches!(e.event, Event::EventsDropped { .. })).count() as u64;
-        let dropped: u64 = out.iter().map(|e| if let Event::EventsDropped { count } = e.event { count } else { 0 }).sum();
-        assert_eq!(delivered + dropped, 200, "every emitted event is either delivered or counted");
+        let delivered = out
+            .iter()
+            .filter(|e| !matches!(e.event, Event::EventsDropped { .. }))
+            .count() as u64;
+        let dropped: u64 = out
+            .iter()
+            .map(|e| {
+                if let Event::EventsDropped { count } = e.event {
+                    count
+                } else {
+                    0
+                }
+            })
+            .sum();
+        assert_eq!(
+            delivered + dropped,
+            200,
+            "every emitted event is either delivered or counted"
+        );
     }
 
     #[tokio::test]
     async fn emit_never_blocks_when_nobody_consumes() {
         let (dtx, _keep) = mpsc::channel(1);
-        let bus = Bus::spawn("r".into(), BusConfig { queue: 4, live_capacity: 4 }, Some(dtx));
+        let bus = Bus::spawn(
+            "r".into(),
+            BusConfig {
+                queue: 4,
+                live_capacity: 4,
+            },
+            Some(dtx),
+        );
         let sink = bus.sink();
         let t = std::time::Instant::now();
         for i in 0..100_000 {
