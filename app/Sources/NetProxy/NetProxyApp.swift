@@ -60,6 +60,7 @@ struct NetProxyApp: App {
     @State private var showExport = false
     @State private var showImport = false
     @State private var showBreakpoints = false
+    @State private var showPausedRequests = false
 
     var body: some Scene {
         WindowGroup("NetProxy") {
@@ -101,6 +102,11 @@ struct NetProxyApp: App {
                 .sheet(isPresented: $showBreakpoints) {
                     BreakpointsView()
                         .environment(model)
+                }
+                .sheet(isPresented: $showPausedRequests) {
+                    if let client = model.client {
+                        PausedRequestsView(client: client)
+                    }
                 }
         }
         .defaultSize(width: 1280, height: 780)
@@ -153,6 +159,8 @@ struct NetProxyApp: App {
                 Divider()
                 Button("Manage Breakpoints...") { showBreakpoints = true }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
+                Button("Paused Requests...") { showPausedRequests = true }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
                 Divider()
                 Button("Export...") { showExport = true }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
