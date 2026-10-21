@@ -34,6 +34,7 @@ tracing-subscriber = { version = "0.3", features = ["registry", "fmt", "env-filt
 notify = { version = "7", default-features = false, features = ["macos_kqueue"] }
 regex = "1"
 lazy_static = "1.5"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 sha2 = "0.10"

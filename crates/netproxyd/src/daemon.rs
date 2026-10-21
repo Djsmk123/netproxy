@@ -7,13 +7,56 @@ use np_engine::{
 };
 use np_mock::DynamicMockRegistry;
 use np_store::{Store, StoreError, WriterHandle};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 use tokio::sync::{mpsc, watch, Mutex};
+
+/// Breakpoint configuration for request interception.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Breakpoint {
+    pub id: String,
+    pub pattern: String,
+    pub enabled: bool,
+}
+
+/// In-memory breakpoint storage.
+#[derive(Debug, Default)]
+pub struct BreakpointStore {
+    breakpoints: HashMap<String, Breakpoint>,
+}
+
+impl BreakpointStore {
+    pub fn add(&mut self, pattern: String, enabled: bool) -> Breakpoint {
+        let id = format!("bp-{}", uuid::Uuid::new_v4());
+        let bp = Breakpoint {
+            id: id.clone(),
+            pattern,
+            enabled,
+        };
+        self.breakpoints.insert(id, bp.clone());
+        bp
+    }
+
+    pub fn list(&self) -> Vec<Breakpoint> {
+        self.breakpoints.values().cloned().collect()
+    }
+
+    pub fn remove(&mut self, id: &str) -> Option<Breakpoint> {
+        self.breakpoints.remove(id)
+    }
+
+    pub fn toggle(&mut self, id: &str, enabled: bool) -> Option<Breakpoint> {
+        self.breakpoints.get_mut(id).map(|bp| {
+            bp.enabled = enabled;
+            bp.clone()
+        })
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum DaemonError {
@@ -143,6 +186,7 @@ pub struct Daemon {
     committed: Arc<watch::Sender<u64>>,
     status: std::sync::Mutex<Status>,
     stats: std::sync::Mutex<Option<Arc<np_engine::bus::BusStats>>>,
+    pub breakpoints: std::sync::Mutex<BreakpointStore>,
 }
 
 fn run_id() -> String {
@@ -180,6 +224,7 @@ impl Daemon {
                 dropped: 0,
             }),
             stats: std::sync::Mutex::new(None),
+            breakpoints: std::sync::Mutex::new(BreakpointStore::default()),
         }))
     }
 

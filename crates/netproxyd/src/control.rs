@@ -694,15 +694,21 @@ async fn dispatch(
             }
             let P { pattern, enabled } = p(params)?;
             tracing::info!(client, %pattern, "breakpoints.add");
-            // TODO: Store breakpoints in daemon state
-            Ok(
-                json!({"id": format!("bp-{}", pattern.replace("/", "-")), "pattern": pattern, "enabled": enabled.unwrap_or(true)}),
-            )
+
+            let bp = d
+                .breakpoints
+                .lock()
+                .unwrap()
+                .add(pattern, enabled.unwrap_or(true));
+
+            Ok(serde_json::to_value(bp).unwrap())
         }
         "breakpoints.list" => {
             tracing::info!(client, "breakpoints.list");
-            // TODO: Return actual breakpoints from daemon state
-            Ok(json!({"breakpoints": []}))
+
+            let breakpoints = d.breakpoints.lock().unwrap().list();
+
+            Ok(json!({"breakpoints": breakpoints}))
         }
         "breakpoints.remove" => {
             #[derive(Deserialize)]
@@ -711,8 +717,13 @@ async fn dispatch(
             }
             let P { id } = p(params)?;
             tracing::info!(client, %id, "breakpoints.remove");
-            // TODO: Remove from daemon state
-            Ok(json!({"removed": id}))
+
+            let removed = d.breakpoints.lock().unwrap().remove(&id);
+
+            match removed {
+                Some(bp) => Ok(serde_json::to_value(bp).unwrap()),
+                None => Err((-32602, format!("breakpoint not found: {}", id))),
+            }
         }
         "breakpoints.toggle" => {
             #[derive(Deserialize)]
@@ -722,8 +733,13 @@ async fn dispatch(
             }
             let P { id, enabled } = p(params)?;
             tracing::info!(client, %id, %enabled, "breakpoints.toggle");
-            // TODO: Update daemon state
-            Ok(json!({"id": id, "enabled": enabled}))
+
+            let toggled = d.breakpoints.lock().unwrap().toggle(&id, enabled);
+
+            match toggled {
+                Some(bp) => Ok(serde_json::to_value(bp).unwrap()),
+                None => Err((-32602, format!("breakpoint not found: {}", id))),
+            }
         }
         "flows.list" => {
             #[derive(Deserialize, Default)]
