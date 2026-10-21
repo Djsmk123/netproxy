@@ -754,5 +754,207 @@ pub fn get_tools() -> Vec<Tool> {
                 }
             }),
         },
+        // ==================== Breakpoints Management ====================
+        Tool {
+            name: "breakpoint_add".to_string(),
+            description: "Add a request breakpoint on URL pattern (wildcards supported)".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["pattern"],
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "URL pattern to match (supports * wildcards)"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable breakpoint immediately"
+                    }
+                }
+            }),
+        },
+        Tool {
+            name: "breakpoint_list".to_string(),
+            description: "List all request breakpoints".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        Tool {
+            name: "breakpoint_remove".to_string(),
+            description: "Remove a breakpoint by ID".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Breakpoint ID to remove"
+                    }
+                }
+            }),
+        },
+        Tool {
+            name: "breakpoint_toggle".to_string(),
+            description: "Enable or disable a breakpoint".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["id", "enabled"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Breakpoint ID"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "New enabled state"
+                    }
+                }
+            }),
+        },
+        // ==================== Request Operations ====================
+        Tool {
+            name: "request_save_file".to_string(),
+            description: "Save request and/or response to file from a captured flow".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["flow_id", "output_path"],
+                "properties": {
+                    "run": {
+                        "type": "string",
+                        "description": "Run ID (default: current)"
+                    },
+                    "flow_id": {
+                        "type": "integer",
+                        "description": "Flow ID to save"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Output file path"
+                    },
+                    "part": {
+                        "type": "string",
+                        "enum": ["request", "response", "both"],
+                        "default": "both",
+                        "description": "Which part to save"
+                    }
+                }
+            }),
+        },
+        Tool {
+            name: "request_copy_curl".to_string(),
+            description: "Generate a cURL command from a captured request".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["flow_id"],
+                "properties": {
+                    "run": {
+                        "type": "string",
+                        "description": "Run ID (default: current)"
+                    },
+                    "flow_id": {
+                        "type": "integer",
+                        "description": "Flow ID to convert"
+                    }
+                }
+            }),
+        },
+        // ==================== Session Import/Export ====================
+        Tool {
+            name: "session_import_har".to_string(),
+            description: "Import HAR file as a new session".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["har_path"],
+                "properties": {
+                    "har_path": {
+                        "type": "string",
+                        "description": "Path to HAR file to import"
+                    }
+                }
+            }),
+        },
+        Tool {
+            name: "sessions_delete_bulk".to_string(),
+            description: "Delete multiple sessions at once".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["run_ids"],
+                "properties": {
+                    "run_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Array of run IDs to delete"
+                    }
+                }
+            }),
+        },
+        // ==================== Mock Map Local/Remote ====================
+        Tool {
+            name: "mock_map_local".to_string(),
+            description: "Create a mock that maps a URL to a local file".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["pattern", "file_path"],
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "URL pattern to match (supports * wildcards)"
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": "Local file to serve"
+                    },
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method to match (optional)"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable rule immediately"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Rule priority"
+                    }
+                }
+            }),
+        },
+        Tool {
+            name: "mock_map_remote".to_string(),
+            description: "Create a mock that redirects one URL to another".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["pattern", "target_url"],
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "URL pattern to match (supports * wildcards)"
+                    },
+                    "target_url": {
+                        "type": "string",
+                        "description": "Target URL to redirect to"
+                    },
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method to match (optional)"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable rule immediately"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Rule priority"
+                    }
+                }
+            }),
+        },
     ]
 }

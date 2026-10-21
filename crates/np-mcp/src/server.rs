@@ -404,6 +404,269 @@ impl NetProxyMcpServer {
 
             "validate_mocks" => ("mocks.validate", json!({})),
 
+            // Breakpoints
+            "breakpoint_add" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    pattern: String,
+                    #[serde(default = "default_true")]
+                    enabled: bool,
+                }
+                fn default_true() -> bool {
+                    true
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+                (
+                    "breakpoints.add",
+                    json!({ "pattern": args.pattern, "enabled": args.enabled }),
+                )
+            }
+            "breakpoint_list" => ("breakpoints.list", json!({})),
+            "breakpoint_remove" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    id: String,
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+                ("breakpoints.remove", json!({ "id": args.id }))
+            }
+            "breakpoint_toggle" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    id: String,
+                    enabled: bool,
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+                (
+                    "breakpoints.toggle",
+                    json!({ "id": args.id, "enabled": args.enabled }),
+                )
+            }
+
+            // Session import/export
+            "session_import_har" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    har_path: String,
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+
+                // Read HAR file
+                let har_content = tokio::fs::read_to_string(&args.har_path)
+                    .await
+                    .map_err(|e| McpError {
+                        code: E_INTERNAL,
+                        message: format!("Failed to read HAR file: {}", e),
+                        data: None,
+                    })?;
+
+                ("runs.import", json!({ "har_json": har_content }))
+            }
+            "sessions_delete_bulk" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    run_ids: Vec<String>,
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+                ("runs.delete", json!({ "runs": args.run_ids }))
+            }
+
+            // Request operations
+            "request_save_file" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    #[serde(default)]
+                    run: Option<String>,
+                    flow_id: u64,
+                    output_path: String,
+                    #[serde(default = "default_part")]
+                    part: String,
+                }
+                fn default_part() -> String {
+                    "both".to_string()
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+
+                // Get flow data via control API
+                let run = args.run.unwrap_or_else(|| "current".to_string());
+                let flow_result = client
+                    .call("flows.get", json!({ "run": run, "id": args.flow_id }))
+                    .await
+                    .map_err(|e| McpError {
+                        code: E_INTERNAL,
+                        message: format!("Failed to get flow: {}", e),
+                        data: None,
+                    })?;
+
+                // Write to file
+                let content = serde_json::to_string_pretty(&flow_result).map_err(|e| McpError {
+                    code: E_INTERNAL,
+                    message: format!("Failed to serialize flow: {}", e),
+                    data: None,
+                })?;
+
+                tokio::fs::write(&args.output_path, content.as_bytes())
+                    .await
+                    .map_err(|e| McpError {
+                        code: E_INTERNAL,
+                        message: format!("Failed to write file: {}", e),
+                        data: None,
+                    })?;
+
+                return Ok(json!({
+                    "path": args.output_path,
+                    "size": content.len(),
+                    "part": args.part
+                }));
+            }
+            "request_copy_curl" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    #[serde(default)]
+                    run: Option<String>,
+                    flow_id: u64,
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+
+                let run = args.run.unwrap_or_else(|| "current".to_string());
+                (
+                    "flows.curl",
+                    json!({ "run": run, "id": args.flow_id }),
+                )
+            }
+
+            // Mock map local/remote
+            "mock_map_local" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    pattern: String,
+                    file_path: String,
+                    #[serde(default)]
+                    method: Option<String>,
+                    #[serde(default = "default_true")]
+                    enabled: bool,
+                    #[serde(default = "default_priority")]
+                    priority: i32,
+                }
+                fn default_true() -> bool {
+                    true
+                }
+                fn default_priority() -> i32 {
+                    100
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+
+                // Read file content
+                let content = tokio::fs::read(&args.file_path)
+                    .await
+                    .map_err(|e| McpError {
+                        code: E_INTERNAL,
+                        message: format!("Failed to read file: {}", e),
+                        data: None,
+                    })?;
+
+                // Create mock rule
+                let rule = json!({
+                    "id": format!("map-local-{}", uuid::Uuid::new_v4()),
+                    "priority": args.priority,
+                    "enabled": args.enabled,
+                    "description": format!("Map {} to {}", args.pattern, args.file_path),
+                    "match": {
+                        "method": args.method,
+                        "path": args.pattern
+                    },
+                    "action": {
+                        "type": "respond",
+                        "status": 200,
+                        "body": {
+                            "inline": String::from_utf8_lossy(&content)
+                        }
+                    }
+                });
+
+                ("mocks.add", json!({ "rule": rule }))
+            }
+            "mock_map_remote" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    pattern: String,
+                    target_url: String,
+                    #[serde(default)]
+                    method: Option<String>,
+                    #[serde(default = "default_true")]
+                    enabled: bool,
+                    #[serde(default = "default_priority")]
+                    priority: i32,
+                }
+                fn default_true() -> bool {
+                    true
+                }
+                fn default_priority() -> i32 {
+                    100
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+
+                // Create redirect mock rule
+                let rule = json!({
+                    "id": format!("map-remote-{}", uuid::Uuid::new_v4()),
+                    "priority": args.priority,
+                    "enabled": args.enabled,
+                    "description": format!("Redirect {} to {}", args.pattern, args.target_url),
+                    "match": {
+                        "method": args.method,
+                        "path": args.pattern
+                    },
+                    "action": {
+                        "type": "respond",
+                        "status": 302,
+                        "headers": {
+                            "Location": args.target_url
+                        },
+                        "body": {
+                            "inline": ""
+                        }
+                    }
+                });
+
+                ("mocks.add", json!({ "rule": rule }))
+            }
+
             _ => {
                 return Err(McpError {
                     code: E_METHOD_NOT_FOUND,
