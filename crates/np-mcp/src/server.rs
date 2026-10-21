@@ -405,6 +405,49 @@ impl NetProxyMcpServer {
             "validate_mocks" => ("mocks.validate", json!({})),
 
             // Breakpoints
+            "breakpoint_paused" => ("breakpoints.paused", json!({})),
+            "breakpoint_continue_request" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    id: String,
+                    #[serde(default)]
+                    modify: Option<serde_json::Value>,
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+                (
+                    "breakpoints.continue",
+                    json!({ "id": args.id, "modify": args.modify }),
+                )
+            }
+            "breakpoint_cancel_request" => {
+                #[derive(Deserialize)]
+                struct Args {
+                    id: String,
+                    #[serde(default = "default_status")]
+                    status: u16,
+                    #[serde(default = "default_message")]
+                    message: String,
+                }
+                fn default_status() -> u16 {
+                    502
+                }
+                fn default_message() -> String {
+                    "Request cancelled by breakpoint".to_string()
+                }
+                let args: Args = serde_json::from_value(arguments).map_err(|e| McpError {
+                    code: E_INVALID_PARAMS,
+                    message: format!("Invalid arguments: {}", e),
+                    data: None,
+                })?;
+                (
+                    "breakpoints.cancel",
+                    json!({ "id": args.id, "status": args.status, "message": args.message }),
+                )
+            }
             "breakpoint_add" => {
                 #[derive(Deserialize)]
                 struct Args {

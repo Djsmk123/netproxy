@@ -814,6 +814,70 @@ pub fn get_tools() -> Vec<Tool> {
                 }
             }),
         },
+        Tool {
+            name: "breakpoint_paused".to_string(),
+            description: "List all paused requests waiting at breakpoints".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        Tool {
+            name: "breakpoint_continue_request".to_string(),
+            description: "Continue a paused request (optionally with modifications)".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Paused request ID"
+                    },
+                    "modify": {
+                        "type": "object",
+                        "description": "Optional modifications to apply",
+                        "properties": {
+                            "method": {
+                                "type": "string",
+                                "description": "New HTTP method"
+                            },
+                            "uri": {
+                                "type": "string",
+                                "description": "New URI"
+                            },
+                            "headers": {
+                                "type": "object",
+                                "description": "New headers"
+                            }
+                        }
+                    }
+                }
+            }),
+        },
+        Tool {
+            name: "breakpoint_cancel_request".to_string(),
+            description: "Cancel a paused request and return an error response".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Paused request ID"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "default": 502,
+                        "description": "HTTP status code for the error response"
+                    },
+                    "message": {
+                        "type": "string",
+                        "default": "Request cancelled by breakpoint",
+                        "description": "Error message"
+                    }
+                }
+            }),
+        },
         // ==================== Request Operations ====================
         Tool {
             name: "request_save_file".to_string(),

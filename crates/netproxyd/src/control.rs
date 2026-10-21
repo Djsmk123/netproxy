@@ -741,6 +741,70 @@ async fn dispatch(
                 None => Err((-32602, format!("breakpoint not found: {}", id))),
             }
         }
+        "breakpoints.paused" => {
+            tracing::info!(client, "breakpoints.paused");
+
+            let paused = d.paused_requests.lock().unwrap().list();
+
+            Ok(json!({"paused": paused}))
+        }
+        "breakpoints.continue" => {
+            #[derive(Deserialize)]
+            struct P {
+                id: String,
+                #[serde(default)]
+                modify: Option<Value>,
+            }
+            let P { id, modify } = p(params)?;
+            tracing::info!(client, %id, "breakpoints.continue");
+
+            let action = if let Some(mods) = modify {
+                use crate::breakpoint_engine::RequestAction;
+                RequestAction::Modify {
+                    method: mods.get("method").and_then(|v| v.as_str()).map(String::from),
+                    uri: mods.get("uri").and_then(|v| v.as_str()).map(String::from),
+                    headers: mods.get("headers").and_then(|v| serde_json::from_value(v.clone()).ok()),
+                }
+            } else {
+                use crate::breakpoint_engine::RequestAction;
+                RequestAction::Continue
+            };
+
+            d.paused_requests
+                .lock()
+                .unwrap()
+                .release(&id, action)
+                .map_err(|e| (-32602, e))?;
+
+            Ok(json!({"released": id}))
+        }
+        "breakpoints.cancel" => {
+            #[derive(Deserialize)]
+            struct P {
+                id: String,
+                #[serde(default = "default_status")]
+                status: u16,
+                #[serde(default = "default_message")]
+                message: String,
+            }
+            fn default_status() -> u16 {
+                502
+            }
+            fn default_message() -> String {
+                "Request cancelled by breakpoint".to_string()
+            }
+            let P { id, status, message } = p(params)?;
+            tracing::info!(client, %id, "breakpoints.cancel");
+
+            use crate::breakpoint_engine::RequestAction;
+            d.paused_requests
+                .lock()
+                .unwrap()
+                .release(&id, RequestAction::Cancel { status, message })
+                .map_err(|e| (-32602, e))?;
+
+            Ok(json!({"cancelled": id}))
+        }
         "flows.list" => {
             #[derive(Deserialize, Default)]
             struct P {

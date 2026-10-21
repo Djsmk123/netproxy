@@ -1,5 +1,7 @@
 //! `netproxyd`: owns the engine lifecycle, the store and the authenticated control API.
 pub mod bodies;
+pub mod breakpoint_engine;
+pub mod breakpoint_resolver;
 pub mod control;
 pub mod control_client;
 pub mod daemon;

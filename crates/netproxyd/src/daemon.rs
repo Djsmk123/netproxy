@@ -1,6 +1,6 @@
 //! Engine lifecycle owner: wires CA, store writer, bus and engine into numbered capture runs.
 
-use crate::watcher::{MockConfigWatcher, WatcherError};
+use crate::{breakpoint_engine::PausedRequestStore, watcher::{MockConfigWatcher, WatcherError}};
 use np_engine::{
     Bus, BusConfig, CaMaterial, EngineConfig, EngineError, EngineHandle, KeyStorage, MockResolver,
     NoMocks, ProxyEngine,
@@ -186,7 +186,8 @@ pub struct Daemon {
     committed: Arc<watch::Sender<u64>>,
     status: std::sync::Mutex<Status>,
     stats: std::sync::Mutex<Option<Arc<np_engine::bus::BusStats>>>,
-    pub breakpoints: std::sync::Mutex<BreakpointStore>,
+    pub breakpoints: Arc<std::sync::Mutex<BreakpointStore>>,
+    pub paused_requests: Arc<std::sync::Mutex<PausedRequestStore>>,
 }
 
 fn run_id() -> String {
@@ -224,7 +225,8 @@ impl Daemon {
                 dropped: 0,
             }),
             stats: std::sync::Mutex::new(None),
-            breakpoints: std::sync::Mutex::new(BreakpointStore::default()),
+            breakpoints: Arc::new(std::sync::Mutex::new(BreakpointStore::default())),
+            paused_requests: Arc::new(std::sync::Mutex::new(PausedRequestStore::new())),
         }))
     }
 
@@ -345,9 +347,16 @@ impl Daemon {
         let mut ecfg =
             EngineConfig::new(listen.unwrap_or(self.cfg.default_listen), self.ca.clone());
         ecfg.upstream_roots_pem = self.cfg.upstream_roots_pem.clone();
+
+        // Wrap the mock resolver with breakpoint checking
+        let breakpoint_resolver = Arc::new(crate::breakpoint_resolver::BreakpointMockResolver::new(
+            self.cfg.mock.clone(),
+            Arc::new(std::sync::Mutex::new(BreakpointStore::default())), // TODO: share with self.breakpoints
+            Arc::new(std::sync::Mutex::new(crate::breakpoint_engine::PausedRequestStore::new())), // TODO: share with self.paused_requests
+        ));
         ecfg.mock = Arc::new(crate::setup::DeviceSetup::new(
             &self.ca,
-            self.cfg.mock.clone(),
+            breakpoint_resolver,
         )?);
         if let Some(b) = self.cfg.bodies {
             ecfg.bodies = Arc::new(crate::bodies::FileBodySink::new(
